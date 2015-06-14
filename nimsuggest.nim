@@ -320,6 +320,14 @@ proc handleCmdLine() =
       gProjectName = p.name
     else:
       gProjectPath = getCurrentDir()
+
+    # Find Nim's prefix dir.
+    let binaryPath = findExe("nim")
+    if binaryPath == "":
+      raise newException(IOError,
+          "Cannot find Nim standard library: Nim compiler not in PATH")
+    gPrefixDir = binaryPath.splitPath().head.parentDir()
+
     loadConfigs(DefaultConfig) # load all config files
     # now process command line arguments again, because some options in the
     # command line can overwite the config file's settings

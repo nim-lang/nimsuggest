@@ -8,4 +8,4 @@ license       = "MIT"
 bin = "nimsuggest"
 
 [Deps]
-Requires: "nim >= 0.11.2, compiler#devel"
+Requires: "nim >= 0.11.2, compiler >= 0.11.3"
