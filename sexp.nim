@@ -466,7 +466,7 @@ proc `==`* (a,b: SexpNode): bool =
     of SCons:
       a.car == b.car and a.cdr == b.cdr
 
-proc hash* (n:SexpNode): THash =
+proc hash* (n:SexpNode): Hash =
   ## Compute the hash for a SEXP node
   case n.kind
   of SList:
