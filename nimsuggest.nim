@@ -192,78 +192,74 @@ proc parseCmdLine(cmd: string) =
 
   execute(gIdeCmd, orig, dirtyfile, line, col-1)
 
-proc serve() =
-  case gMode:
-  of mstdin:
-    echo Help
-    var line = ""
-    while readLineFromStdin("> ", line):
-      parseCmdLine line
-      echo ""
-      flushFile(stdout)
-  of mtcp:
-    var server = newSocket()
-    server.bindAddr(gPort, gAddress)
-    var inp = "".TaintedString
-    server.listen()
+proc serveStdin() =
+  echo Help
+  var line = ""
+  while readLineFromStdin("> ", line):
+    parseCmdLine line
+    echo ""
+    flushFile(stdout)
 
-    while true:
-      var stdoutSocket = newSocket()
-      msgs.writelnHook = proc (line: string) =
-        stdoutSocket.send(line & "\c\L")
+proc serveTcp() =
+  var server = newSocket()
+  server.bindAddr(gPort, gAddress)
+  var inp = "".TaintedString
+  server.listen()
 
-      accept(server, stdoutSocket)
+  while true:
+    var stdoutSocket = newSocket()
+    msgs.writelnHook = proc (line: string) =
+      stdoutSocket.send(line & "\c\L")
 
-      stdoutSocket.readLine(inp)
-      parseCmdLine inp.string
+    accept(server, stdoutSocket)
 
-      stdoutSocket.send("\c\L")
-      stdoutSocket.close()
-  of mepc:
-    var server = newSocket()
-    let port = connectToNextFreePort(server, "localhost")
-    var inp = "".TaintedString
-    server.listen()
-    echo(port)
-    var client = newSocket()
-    # Wait for connection
-    accept(server, client)
-    while true:
-      var sizeHex = ""
-      if client.recv(sizeHex, 6) != 6:
-        raise newException(ValueError, "didn't get all the hexbytes")
-      var size = 0
-      if parseHex(sizeHex, size) == 0:
-        raise newException(ValueError, "invalid size hex: " & $sizeHex)
-      var messageBuffer = ""
-      if client.recv(messageBuffer, size) != size:
-        raise newException(ValueError, "didn't get all the bytes")
+    stdoutSocket.readLine(inp)
+    parseCmdLine inp.string
+
+    stdoutSocket.send("\c\L")
+    stdoutSocket.close()
+
+proc serveEpc(server: Socket) =
+  var inp = "".TaintedString
+  var client = newSocket()
+  # Wait for connection
+  accept(server, client)
+  while true:
+    var sizeHex = ""
+    if client.recv(sizeHex, 6) != 6:
+      raise newException(ValueError, "didn't get all the hexbytes")
+    var size = 0
+    if parseHex(sizeHex, size) == 0:
+      raise newException(ValueError, "invalid size hex: " & $sizeHex)
+    var messageBuffer = ""
+    if client.recv(messageBuffer, size) != size:
+      raise newException(ValueError, "didn't get all the bytes")
+    let
+      message = parseSexp($messageBuffer)
+      messageType = message[0].getSymbol
+    case messageType:
+    of "call":
+      var results: seq[Suggest] = @[]
+      suggestionResultHook = proc (s: Suggest) =
+        results.add(s)
+
       let
-        message = parseSexp($messageBuffer)
-        messageType = message[0].getSymbol
-      case messageType:
-      of "call":
-        var results: seq[Suggest] = @[]
-        suggestionResultHook = proc (s: Suggest) =
-          results.add(s)
-
-        let
-          uid = message[1].getNum
-          cmd = parseIdeCmd(message[2].getSymbol)
-          args = message[3]
-        executeEPC(cmd, args)
-        returnEPC(client, uid, sexp(results))
-      of "return":
-        raise newException(EUnexpectedCommand, "no return expected")
-      of "return-error":
-        raise newException(EUnexpectedCommand, "no return expected")
-      of "epc-error":
-        stderr.writeln("recieved epc error: " & $messageBuffer)
-        raise newException(IOError, "epc error")
-      of "methods":
-        returnEPC(client, message[1].getNum, listEPC())
-      else:
-        raise newException(EUnexpectedCommand, "unexpected call: " & messageType)
+        uid = message[1].getNum
+        cmd = parseIdeCmd(message[2].getSymbol)
+        args = message[3]
+      executeEPC(cmd, args)
+      returnEPC(client, uid, sexp(results))
+    of "return":
+      raise newException(EUnexpectedCommand, "no return expected")
+    of "return-error":
+      raise newException(EUnexpectedCommand, "no return expected")
+    of "epc-error":
+      stderr.writeln("recieved epc error: " & $messageBuffer)
+      raise newException(IOError, "epc error")
+    of "methods":
+      returnEPC(client, message[1].getNum, listEPC())
+    else:
+      raise newException(EUnexpectedCommand, "unexpected call: " & messageType)
 
 proc mainCommand =
   registerPass verbosePass
@@ -279,8 +275,21 @@ proc mainCommand =
 
   # do not stop after the first error:
   msgs.gErrorMax = high(int)
-  compileProject()
-  serve()
+
+  case gMode:
+    of mstdin:
+      compileProject()
+      serveStdin()
+    of mtcp:
+      compileProject()
+      serveTcp()
+    of mepc:
+      var server = newSocket()
+      let port = connectToNextFreePort(server, "localhost")
+      server.listen()
+      echo port
+      compileProject()
+      serveEpc(server)
 
 proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
   var p = parseopt.initOptParser(cmd)
