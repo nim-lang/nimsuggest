@@ -50,7 +50,7 @@ var
 
 const
   seps = {':', ';', ' ', '\t'}
-  Help = "usage: sug|con|def|use file.nim[;dirtyfile.nim]:line:col\n"&
+  Help = "usage: sug|con|def|use|dus file.nim[;dirtyfile.nim]:line:col\n" &
          "type 'quit' to quit\n" &
          "type 'debug' to toggle debug mode on/off\n" &
          "type 'terse' to toggle terse mode on/off"
@@ -95,7 +95,7 @@ proc listEPC(): SexpNode =
     argspecs = sexp("file line column dirtyfile".split(" ").map(newSSymbol))
     docstring = sexp("line starts at 1, column at 0, dirtyfile is optional")
   result = newSList()
-  for command in ["sug", "con", "def", "use"]:
+  for command in ["sug", "con", "def", "use", "dus"]:
     let
       cmd = sexp(command)
       methodDesc = newSList()
@@ -134,7 +134,8 @@ proc executeEPC(cmd: IdeCmd, args: SexpNode) =
     dirtyfile = args[3].getStr(nil)
   execute(cmd, file, dirtyfile, int(line), int(column))
 
-proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode, return_symbol = "return") =
+proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode,
+               return_symbol = "return") =
   let response = $convertSexp([newSSymbol(return_symbol), uid, s])
   socket.send(toHex(len(response), 6))
   socket.send(response)
@@ -174,6 +175,7 @@ proc parseCmdLine(cmd: string) =
   of "con": gIdeCmd = ideCon
   of "def": gIdeCmd = ideDef
   of "use": gIdeCmd = ideUse
+  of "dus": gIdeCmd = ideDus
   of "quit": quit()
   of "debug": toggle optIdeDebug
   of "terse": toggle optIdeTerse
