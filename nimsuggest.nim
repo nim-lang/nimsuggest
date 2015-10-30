@@ -34,6 +34,7 @@ Options:
   --stdin                 read commands from stdin and write results to
                           stdout instead of using sockets
   --epc                   use emacs epc mode
+  --debug                 enable debug output
 
 The server then listens to the connection and takes line-based commands.
 
@@ -50,7 +51,7 @@ var
 
 const
   seps = {':', ';', ' ', '\t'}
-  Help = "usage: sug|con|def|use|dus file.nim[;dirtyfile.nim]:line:col\n" &
+  Help = "usage: sug|con|def|use|dus|chk file.nim[;dirtyfile.nim]:line:col\n" &
          "type 'quit' to quit\n" &
          "type 'debug' to toggle debug mode on/off\n" &
          "type 'terse' to toggle terse mode on/off"
@@ -106,8 +107,8 @@ proc listEPC(): SexpNode =
 
 proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
   gIdeCmd = cmd
-  if cmd == ideUse:
-    modules.resetAllModules()
+  #if cmd == ideUse:
+  #  modules.resetAllModules()
   var isKnownFile = true
   let dirtyIdx = file.fileInfoIdx(isKnownFile)
 
@@ -120,9 +121,15 @@ proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
 
   gTrackPos = newLineInfo(dirtyIdx, line, col)
   gErrorCounter = 0
+  usageSym = nil
   if not isKnownFile:
     compileProject()
   compileProject(dirtyIdx)
+  if gIdeCmd in {ideUse, ideDus}:
+    if usageSym != nil:
+      listUsages(usageSym)
+    else:
+      localError(gTrackPos, "found no symbol at this position")
 
 proc executeEPC(cmd: IdeCmd, args: SexpNode) =
   let
@@ -176,6 +183,7 @@ proc parseCmdLine(cmd: string) =
   of "def": gIdeCmd = ideDef
   of "use": gIdeCmd = ideUse
   of "dus": gIdeCmd = ideDus
+  of "chk": gIdeCmd = ideChk
   of "quit": quit()
   of "debug": toggle optIdeDebug
   of "terse": toggle optIdeTerse
@@ -256,7 +264,7 @@ proc serveEpc(server: Socket) =
     of "return-error":
       raise newException(EUnexpectedCommand, "no return expected")
     of "epc-error":
-      stderr.writeln("recieved epc error: " & $messageBuffer)
+      stderr.writeline("recieved epc error: " & $messageBuffer)
       raise newException(IOError, "epc error")
     of "methods":
       returnEPC(client, message[1].getNum, listEPC())
@@ -278,20 +286,20 @@ proc mainCommand =
   # do not stop after the first error:
   msgs.gErrorMax = high(int)
 
-  case gMode:
-    of mstdin:
-      compileProject()
-      serveStdin()
-    of mtcp:
-      compileProject()
-      serveTcp()
-    of mepc:
-      var server = newSocket()
-      let port = connectToNextFreePort(server, "localhost")
-      server.listen()
-      echo port
-      compileProject()
-      serveEpc(server)
+  case gMode
+  of mstdin:
+    compileProject()
+    serveStdin()
+  of mtcp:
+    compileProject()
+    serveTcp()
+  of mepc:
+    var server = newSocket()
+    let port = connectToNextFreePort(server, "localhost")
+    server.listen()
+    echo port
+    compileProject()
+    serveEpc(server)
 
 proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
   var p = parseopt.initOptParser(cmd)
@@ -311,6 +319,8 @@ proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
       of "epc":
         gMode = mepc
         gVerbosity = 0          # Port number gotta be first.
+      of "debug":
+        incl(gGlobalOptions, optIdeDebug)
       else: processSwitch(pass, p)
     of cmdArgument:
       options.gProjectName = unixToNativePath(p.key)
@@ -318,7 +328,7 @@ proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
 
 proc handleCmdLine() =
   if paramCount() == 0:
-    stdout.writeln(Usage)
+    stdout.writeline(Usage)
   else:
     processCmdLine(passCmd1, "")
     if gProjectName != "":
