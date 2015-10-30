@@ -183,7 +183,9 @@ proc parseCmdLine(cmd: string) =
   of "def": gIdeCmd = ideDef
   of "use": gIdeCmd = ideUse
   of "dus": gIdeCmd = ideDus
-  of "chk": gIdeCmd = ideChk
+  of "chk":
+    gIdeCmd = ideChk
+    incl(gGlobalOptions, optIdeDebug)
   of "quit": quit()
   of "debug": toggle optIdeDebug
   of "terse": toggle optIdeTerse
