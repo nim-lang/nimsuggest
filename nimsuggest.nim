@@ -35,6 +35,8 @@ Options:
                           stdout instead of using sockets
   --epc                   use emacs epc mode
   --debug                 enable debug output
+  --v2                    use version 2 of the protocol; more features and
+                          much faster
 
 The server then listens to the connection and takes line-based commands.
 
@@ -51,7 +53,7 @@ var
 
 const
   seps = {':', ';', ' ', '\t'}
-  Help = "usage: sug|con|def|use|dus|chk file.nim[;dirtyfile.nim]:line:col\n" &
+  Help = "usage: sug|con|def|use|dus|chk|highlight file.nim[;dirtyfile.nim]:line:col\n" &
          "type 'quit' to quit\n" &
          "type 'debug' to toggle debug mode on/off\n" &
          "type 'terse' to toggle terse mode on/off"
@@ -105,31 +107,52 @@ proc listEPC(): SexpNode =
     methodDesc.add(docstring)
     result.add(methodDesc)
 
+proc findNode(n: PNode): PSym =
+  #echo "checking node ", n.info
+  if n.kind == nkSym:
+    if isTracked(n.info, n.sym.name.s.len): return n.sym
+  else:
+    for i in 0 ..< safeLen(n):
+      let res = n.sons[i].findNode
+      if res != nil: return res
+
+proc symFromInfo(gTrackPos: TLineInfo): PSym =
+  let m = getModule(gTrackPos.fileIndex)
+  #echo m.isNil, " I knew it ", gTrackPos.fileIndex
+  if m != nil and m.ast != nil:
+    result = m.ast.findNode
+
 proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
   gIdeCmd = cmd
-  #if cmd == ideUse:
-  #  modules.resetAllModules()
+  if cmd == ideUse and suggestVersion != 2:
+    modules.resetAllModules()
   var isKnownFile = true
   let dirtyIdx = file.fileInfoIdx(isKnownFile)
 
   if dirtyfile.len != 0: msgs.setDirtyFile(dirtyIdx, dirtyfile)
   else: msgs.setDirtyFile(dirtyIdx, nil)
 
-  resetModule dirtyIdx
-  if dirtyIdx != gProjectMainIdx:
-    resetModule gProjectMainIdx
-
   gTrackPos = newLineInfo(dirtyIdx, line, col)
   gErrorCounter = 0
-  usageSym = nil
+  if suggestVersion < 2:
+    usageSym = nil
   if not isKnownFile:
     compileProject()
-  compileProject(dirtyIdx)
+  if suggestVersion == 2 and gIdeCmd in {ideDef, ideUse, ideDus} and
+      dirtyfile.len == 0:
+    discard "no need to recompile anything"
+  else:
+    resetModule dirtyIdx
+    if dirtyIdx != gProjectMainIdx:
+      resetModule gProjectMainIdx
+    compileProject(dirtyIdx)
   if gIdeCmd in {ideUse, ideDus}:
-    if usageSym != nil:
-      listUsages(usageSym)
+    let u = if suggestVersion >= 2: symFromInfo(gTrackPos) else: usageSym
+    if u != nil:
+      listUsages(u)
     else:
-      localError(gTrackPos, "found no symbol at this position")
+      echo "found no symbol at this position " & $gTrackPos
+      localError(gTrackPos, "found no symbol at this position " & $gTrackPos)
 
 proc executeEPC(cmd: IdeCmd, args: SexpNode) =
   let
@@ -186,6 +209,7 @@ proc parseCmdLine(cmd: string) =
   of "chk":
     gIdeCmd = ideChk
     incl(gGlobalOptions, optIdeDebug)
+  of "highlight": gIdeCmd = ideHighlight
   of "quit": quit()
   of "debug": toggle optIdeDebug
   of "terse": toggle optIdeTerse
@@ -293,6 +317,9 @@ proc mainCommand =
     compileProject()
     serveStdin()
   of mtcp:
+    # until somebody accepted the connection, produce no output (logging is too
+    # slow for big projects):
+    msgs.writelnHook = proc (msg: string) = discard
     compileProject()
     serveTcp()
   of mepc:
@@ -323,6 +350,8 @@ proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
         gVerbosity = 0          # Port number gotta be first.
       of "debug":
         incl(gGlobalOptions, optIdeDebug)
+      of "v2":
+        suggestVersion = 2
       else: processSwitch(pass, p)
     of cmdArgument:
       options.gProjectName = unixToNativePath(p.key)
