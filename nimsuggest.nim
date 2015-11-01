@@ -53,7 +53,7 @@ var
 
 const
   seps = {':', ';', ' ', '\t'}
-  Help = "usage: sug|con|def|use|dus|chk|highlight file.nim[;dirtyfile.nim]:line:col\n" &
+  Help = "usage: sug|con|def|use|dus|chk|highlight|outline file.nim[;dirtyfile.nim]:line:col\n" &
          "type 'quit' to quit\n" &
          "type 'debug' to toggle debug mode on/off\n" &
          "type 'terse' to toggle terse mode on/off"
@@ -210,6 +210,7 @@ proc parseCmdLine(cmd: string) =
     gIdeCmd = ideChk
     incl(gGlobalOptions, optIdeDebug)
   of "highlight": gIdeCmd = ideHighlight
+  of "outline": gIdeCmd = ideOutline
   of "quit": quit()
   of "debug": toggle optIdeDebug
   of "terse": toggle optIdeTerse
