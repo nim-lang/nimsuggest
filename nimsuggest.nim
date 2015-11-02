@@ -151,7 +151,6 @@ proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
     if u != nil:
       listUsages(u)
     else:
-      echo "found no symbol at this position " & $gTrackPos
       localError(gTrackPos, "found no symbol at this position " & $gTrackPos)
 
 proc executeEPC(cmd: IdeCmd, args: SexpNode) =
