@@ -169,21 +169,11 @@ proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode,
   socket.send(toHex(len(response), 6))
   socket.send(response)
 
-proc connectToNextFreePort(server: Socket, host: string, start = 30000): int =
-  result = start
-  while true:
-    try:
-      server.bindaddr(Port(result), host)
-      return
-    except OsError:
-      when defined(windows):
-        let checkFor = WSAEADDRINUSE.OSErrorCode
-      else:
-        let checkFor = EADDRINUSE.OSErrorCode
-      if osLastError() != checkFor:
-        raise getCurrentException()
-      else:
-        result += 1
+
+proc connectToNextFreePort(server: Socket, host: string): Port =
+  server.bindaddr(Port(0), host)
+  let (_, port) = server.getLocalAddr
+  result = port
 
 proc parseCmdLine(cmd: string) =
   template toggle(sw) =
