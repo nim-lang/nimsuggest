@@ -65,22 +65,26 @@ method mainCommand(data: TcpModeData) =
   msgs.writelnHook = proc (msg: string) = discard
   echo("Running Nimsuggest TCP Mode on port $#, address \"$#\"" % [$data.port, data.address])
   echo("Project file: \"$#\"" % [data.projectPath])
-  var server = newSocket()
+  var
+    inp = "".TaintedString
+    server = newSocket()
   server.bindAddr(data.port, data.address)
-  var inp = "".TaintedString
   server.listen()
 
-  while true:
+  if data.persist:
     var stdoutSocket = newSocket()
     msgs.writelnHook = proc (line: string) =
       stdoutSocket.send(line & "\c\L")
-
+      
     accept(server, stdoutSocket)
+    
+    template readWriteCommand() =
+        stdoutSocket.readLine(inp)
+        parseCmdLine inp.string
+        stdoutSocket.send("\c\l")
 
-    stdoutSocket.readLine(inp)
-    parseCmdLine inp.string
-
-    stdoutSocket.send("\c\L")
-    if not data.persist:
-      stdoutSocket.close()
-      server = newSocket()
+    while true:
+      readWriteCommand()
+      if data.persist:
+        stdoutSocket.close()
+        server = newSocket()
