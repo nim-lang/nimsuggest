@@ -22,11 +22,9 @@ type StdinModeData = ref object of ModeData
 
 proc initializeData*(): ModeData =
   var res = new(StdinModeData)
-
   result = ModeData(res)
 
-
-proc addModes*(modes: var TableRef[string, ModeInitializer]) =
+proc addModes*(modes: TableRef[string, ModeInitializer]) =
   modes["stdin"] = initializeData
 
 
@@ -44,18 +42,15 @@ method processSwitches(data: StdinModeData, switches: SwitchSequence) =
             data.interactive = parseBool(switch.value)
           except ValueError:
             quit("Invalid \"interactive\" value \"" & switch.value & "\"")
-
       else:
         echo("Invalid mode switch \"$#:$#\"" % [switch.key, switch.value])
         quit()
     else:
       discard
 
-
 method echoOptions(data: StdinModeData) =
   echo(stdinModeHelpMsg)
   quit()
-
 
 method mainCommand(data: StdinModeData) =
   msgs.writelnHook = proc (msg: string) = discard

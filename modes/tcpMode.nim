@@ -26,8 +26,7 @@ proc initializeData*(): ModeData =
 
   result = ModeData(res)
 
-
-proc addModes*(modes: var TableRef[string, ModeInitializer]) =
+proc addModes*(modes: TableRef[string, ModeInitializer]) =
   modes["tcp"] = initializeData
 
 
@@ -52,18 +51,15 @@ method processSwitches(data: TcpModeData, switches: SwitchSequence) =
             data.persist = parseBool(switch.value)
           except ValueError:
             quit("Invalid 'persistance' value '" & switch.value & "'")
-
       else:
         echo("Invalid mode switch '$#'" % [switch.key])
         quit()
     else:
       discard
 
-
 method echoOptions(data: TcpModeData) =
   echo(tcpModeHelpMsg)
   quit()
-
 
 method mainCommand(data: TcpModeData) =
   msgs.writelnHook = proc (msg: string) = discard

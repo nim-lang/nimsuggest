@@ -17,22 +17,21 @@ Nimsuggest EPC Mode Switches:
 """
 
 
-type EpcModeData = ref object of ModeData
-  port: Port
-  address: string not nil
-  persist: bool
+type
+  EpcModeData = ref object of ModeData
+    serverPort: Port
+    address: string not nil
+    persist: bool
 
+  EUnexpectedCommand = object of Exception
 
 proc initializeData*(): ModeData =
   var res = new(EpcModeData)
-  res.port = Port(0)
+  res.serverPort = Port(0)
   res.address = ""
   result = ModeData(res)
 
-type
-  EUnexpectedCommand = object of Exception
-
-proc addModes*(modes: var TableRef[string, ModeInitializer]) =
+proc addModes*(modes: TableRef[string, ModeInitializer]) =
   modes["epc"] = initializeData
 
 
@@ -44,7 +43,7 @@ method processSwitches(data: EpcModeData, switches: SwitchSequence) =
       case switch.key.normalize
       of "p", "port":
         try:
-          data.port = Port(parseInt(switch.value))
+          data.serverPort = Port(parseInt(switch.value))
         except ValueError:
           quit("Invalid port:'" & switch.value & "'")
       of "address":
@@ -54,7 +53,6 @@ method processSwitches(data: EpcModeData, switches: SwitchSequence) =
         quit()
     else:
       discard
-
 
 method echoOptions(data: EpcModeData) =
   echo(epcModeHelpMsg)
@@ -83,13 +81,6 @@ proc sexp(s: seq[Suggest]): SexpNode =
   for sug in s:
     result.add(sexp(sug))
 
-
-
-
-
-
-
-
 proc listEPC(): SexpNode =
   let
     argspecs = sexp("file line column dirtyfile".split(" ").map(newSSymbol))
@@ -103,6 +94,7 @@ proc listEPC(): SexpNode =
     methodDesc.add(argspecs)
     methodDesc.add(docstring)
     result.add(methodDesc)
+
 proc executeEPC(cmd: IdeCmd, args: SexpNode) =
   let
     file = args[0].getStr
@@ -119,9 +111,16 @@ proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode,
   socket.send(toHex(len(response), 6))
   socket.send(response)
 
-proc mainCommand(data: EpcModeData, server: Socket) =
-  var inp = "".TaintedString
-  var client = newSocket()
+method mainCommand(data: EpcModeData) =
+  var
+    client = newSocket()
+    server = newSocket()
+
+   # Setup server socket
+  server.bindaddr(Port(0), data.address)
+  let (_, serverPort) = server.getLocalAddr()
+  echo serverPort
+
   # Wait for connection
   accept(server, client)
   while true:

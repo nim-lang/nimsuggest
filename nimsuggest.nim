@@ -30,9 +30,10 @@ are supported. To pass a Nim compiler command-line argument, prefix it with
 
 type
   nnstring = string not nil
+
   ModeData* = ref object of RootObj
-    mode*: string not nil
-    projectPath*: string not nil
+    mode*: nnstring
+    projectPath*: nnstring
     nimsuggestVersion: int
 
   ModeInitializer* = proc (): ModeData
@@ -40,16 +41,16 @@ type
   SwitchSequence* = seq[
     tuple[
       kind: CmdLineKind,
-      key, value: string not nil
+      key, value: nnstring
     ]
-  ]
+  ] not nil
 
   CmdLineData* = object
-    mode: string not nil
-    nimsuggestSwitches: SwitchSequence not nil
-    modeSwitches: SwitchSequence not nil
-    compilerSwitches: SwitchSequence not nil
-    projectPath: string not nil
+    mode: nnstring
+    nimsuggestSwitches: SwitchSequence
+    modeSwitches: SwitchSequence
+    compilerSwitches: SwitchSequence
+    projectPath: nnstring
 
 
 # ModeData Method Stubs
@@ -64,12 +65,13 @@ method mainCommand(data: ModeData) {.base.} =
 
 
 # Import and add nimsuggest modes
-var modes = newTable[string, ModeInitializer]()
+let modes = newTable[string, ModeInitializer]()
 
 import modes/tcpMode, modes/stdinMode, modes/epcmode
 tcpMode.addModes(modes)
 stdinMode.addModes(modes)
 epcmode.addModes(modes)
+
 
 # Command line logic
 proc badUsage(msg: string = nil) =
@@ -84,8 +86,7 @@ template ifNotNilElse(a, b, c: untyped): untyped =
   else:
     a = value
 
-  
-import winlean
+
 proc gatherCmdLineData(): CmdLineData =
   ## Gather the command line parameters into an CmdLineData object.
   ## This works in two parts: we first get the global nimsuggest switches and
@@ -102,7 +103,6 @@ proc gatherCmdLineData(): CmdLineData =
   # Get the nimsuggest switches and mode
   while true:
     parser.next()
-    echo(parser.key)
     case parser.kind
     of cmdLongOption, cmdShortOption:
       # We filter global switches here to allow the user to pass
@@ -122,10 +122,8 @@ proc gatherCmdLineData(): CmdLineData =
       break
 
   # Process the remaining mode switches and project file.
-  echo(getCommandLineW())
   while true:
     parser.next()
-    echo(parser.key)
     case parser.kind:
     of cmdLongOption, cmdShortOption:
       result.modeSwitches.add(
@@ -186,6 +184,7 @@ proc setupCompiler(projectPath: string) =
       # current path is always looked first for modules
       prependStr(searchPaths, gProjectPath)
 
+
 proc main =
   if paramCount() == 0:
     echo(helpMsg)
@@ -237,7 +236,8 @@ proc main =
   for switch in cmdLineData.compilerSwitches:
     commands.processSwitch(switch.key, switch.value, passCmd2, gCmdLineInfo)
 
-  sleep(100)
+  msgs.writelnHook = (proc (msg: string) = discard)
+  compileProject()
   data.mainCommand()
 
 suggestVersion = 2
