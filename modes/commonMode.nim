@@ -37,22 +37,6 @@ proc parseQuoted*(cmd: string; outp: var string; start: int): int =
     i += parseUntil(cmd, outp, seps, i)
   result = i
 
-proc connectToNextFreePort*(server: Socket, host: string, start = 30000): int =
-  result = start
-  while true:
-    try:
-      server.bindaddr(Port(result), host)
-      return
-    except OsError:
-      when defined(windows):
-        let checkFor = WSAEADDRINUSE.OSErrorCode
-      else:
-        let checkFor = EADDRINUSE.OSErrorCode
-      if osLastError() != checkFor:
-        raise getCurrentException()
-      else:
-        result += 1
-
 proc findNode(n: PNode): PSym =
   #echo "checking node ", n.info
   if n.kind == nkSym:
@@ -142,45 +126,3 @@ proc parseCmdLine*(cmd: string) =
   i += parseInt(cmd, col, i)
 
   execute(gIdeCmd, orig, dirtyfile, line, col-1)
-
-# proc serveEpc(server: Socket) =
-#   var inp = "".TaintedString
-#   var client = newSocket()
-#   # Wait for connection
-#   accept(server, client)
-#   while true:
-#     var sizeHex = ""
-#     if client.recv(sizeHex, 6) != 6:
-#       raise newException(ValueError, "didn't get all the hexbytes")
-#     var size = 0
-#     if parseHex(sizeHex, size) == 0:
-#       raise newException(ValueError, "invalid size hex: " & $sizeHex)
-#     var messageBuffer = ""
-#     if client.recv(messageBuffer, size) != size:
-#       raise newException(ValueError, "didn't get all the bytes")
-#     let
-#       message = parseSexp($messageBuffer)
-#       messageType = message[0].getSymbol
-#     case messageType:
-#     of "call":
-#       var results: seq[Suggest] = @[]
-#       suggestionResultHook = proc (s: Suggest) =
-#         results.add(s)
-
-#       let
-#         uid = message[1].getNum
-#         cmd = parseIdeCmd(message[2].getSymbol)
-#         args = message[3]
-#       executeEPC(cmd, args)
-#       returnEPC(client, uid, sexp(results))
-#     of "return":
-#       raise newException(EUnexpectedCommand, "no return expected")
-#     of "return-error":
-#       raise newException(EUnexpectedCommand, "no return expected")
-#     of "epc-error":
-#       stderr.writeline("recieved epc error: " & $messageBuffer)
-#       raise newException(IOError, "epc error")
-#     of "methods":
-#       returnEPC(client, message[1].getNum, listEPC())
-#     else:
-#       raise newException(EUnexpectedCommand, "unexpected call: " & messageType)
