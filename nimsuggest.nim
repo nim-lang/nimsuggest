@@ -5,7 +5,9 @@ import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/extccomp, compiler/condsyms, compiler/lists,
   compiler/sigmatch, compiler/ast
 
-const helpMsg = """
+const 
+  nimsuggestVersion = "0.1.0"
+  helpMsg = """
 Nimsuggest - Tool to give every editor IDE like capabilities for Nim
 Usage:
   nimsuggest [options] [mode] [mode_options] "path/to/projectfile.nim"
@@ -13,8 +15,9 @@ Usage:
 Options:
   --nimPath:"path"      Set the path to the Nim compiler.
   --v2                  Use protocol version 2       
-  --debug               Enable debug output on stdin.
+  --debug               Enable debug output.
   --help                Print help output for the specified mode.
+  --version             Print nimsuggest version to stdout, then quit.
 
 Modes:
   tcp            Use text-based input from a tcp socket.
@@ -34,7 +37,7 @@ type
   ModeData* = ref object of RootObj
     mode*: nnstring
     projectPath*: nnstring
-    nimsuggestVersion: int
+    protocolVersion: int
 
   ModeInitializer* = proc (): ModeData
 
@@ -211,6 +214,9 @@ proc main =
         quit()
       of "v2":
         suggestVersion = 2
+      of "version":
+        echo(nimsuggestVersion)
+        quit()
       else:
         quit("Invalid switch '$#:$#'" % [switch.key, switch.value])
     else:
