@@ -6,16 +6,22 @@ import compiler/msgs
 const tcpModeHelpMsg = """
 Nimsuggest TCP Mode Switches:
   -p, --port:port_no         Port to use to connect (defaults to 8000).
-  --address:"address"        Address to bind to. Defaults to ""
+  --address:"address"        Address to bind/connect to. Defaults to ""
   --persist                  Create a persistant connection that isn't closed
                              after the first completed command. Completed
                              commands are then denoted by a newline.
+                             Not compatible with the 'client' switch.
+  --client                   Act as a client. In client mode the nimsuggest
+                             tool will attempt to connect to the address and
+                             port specified by the 'address' and 'port'
+                             switches, instead of binding to them as a server.
 """
 
 
 type TcpModeData = ref object of ModeData
   port: Port
   address: string not nil
+  client: bool
   persist: bool
 
 
@@ -23,6 +29,7 @@ proc initializeData*(): ModeData =
   var res = new(TcpModeData)
   res.port = Port(0)
   res.address = ""
+  res.client = false
 
   result = ModeData(res)
 
@@ -43,6 +50,8 @@ method processSwitches(data: TcpModeData, switches: SwitchSequence) =
           quit("Invalid port:'" & switch.value & "'")
       of "address":
         data.address = switch.value
+      of "client":
+        data.client = true
       of "persist":
         if switch.value == "":
           data.persist = true
@@ -61,30 +70,55 @@ method echoOptions(data: TcpModeData) =
   echo(tcpModeHelpMsg)
   quit()
 
+
+proc serveAsServer(data: TcpModeData) =
+  var 
+    server = newSocket()
+    stdoutSocket: Socket
+    inp = "".TaintedString
+  server.bindAddr(data.port, data.address)
+  server.listen()
+
+  template setupStdoutSocket = 
+    stdoutSocket = newSocket()
+    msgs.writelnHook = proc (line: string) =
+      stdoutSocket.send(line & "\c\L")
+    accept(server, stdoutSocket)
+
+  setupStdoutSocket()
+  while true:
+    stdoutSocket.readLine(inp)
+    parseCmdLine inp.string
+    stdoutSocket.send("\c\L")
+
+    if data.persist:
+      stdoutSocket.close()
+      setupStdoutSocket()
+
+proc serveAsClient(data: TcpModeData) =
+  var
+    input = "".TaintedString
+    stdoutSocket: Socket
+
+  while true:
+    if stdoutSocket == nil:
+      stdoutSocket = newSocket()
+      stdoutSocket.connect(data.address, data.port)
+      msgs.writelnHook = proc (line: string) =
+        stdoutSocket.send(line & "\c\L")
+
+    try:
+      stdoutSocket.readLine(input)
+      parseCmdLine(string(input))
+      stdoutSocket.send("\c\l")
+    except OSError:
+      stdoutSocket = nil
+
 method mainCommand(data: TcpModeData) =
   msgs.writelnHook = proc (msg: string) = discard
   echo("Running Nimsuggest TCP Mode on port $#, address \"$#\"" % [$data.port, data.address])
   echo("Project file: \"$#\"" % [data.projectPath])
-  var
-    inp = "".TaintedString
-    server = newSocket()
-  server.bindAddr(data.port, data.address)
-  server.listen()
-
-  if data.persist:
-    var stdoutSocket = newSocket()
-    msgs.writelnHook = proc (line: string) =
-      stdoutSocket.send(line & "\c\L")
-      
-    accept(server, stdoutSocket)
-    
-    template readWriteCommand() =
-        stdoutSocket.readLine(inp)
-        parseCmdLine inp.string
-        stdoutSocket.send("\c\l")
-
-    while true:
-      readWriteCommand()
-      if data.persist:
-        stdoutSocket.close()
-        server = newSocket()
+  if data.client:
+    serveAsClient(data)
+  else:
+    serveAsServer(data)
