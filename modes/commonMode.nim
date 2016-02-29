@@ -1,14 +1,3 @@
-#
-#
-#           The Nim Compiler
-#        (c) Copyright 2015 Andreas Rumpf
-#
-#    See the file "copying.txt", included in this
-#    distribution, for details about the copyright.
-#
-
-## Nimsuggest is a tool that helps to give editors IDE like capabilities.
-
 import strutils, os, parseopt, parseutils, sequtils, net, rdstdin, ../sexp
 # Do NOT import suggest. It will lead to wierd bugs with
 # suggestionResultHook, because suggest.nim is included by sigmatch.
@@ -52,6 +41,7 @@ proc symFromInfo(gTrackPos: TLineInfo): PSym =
   if m != nil and m.ast != nil:
     result = m.ast.findNode
 
+
 proc execute*(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
   gIdeCmd = cmd
   if cmd == ideUse and suggestVersion != 2:
@@ -79,8 +69,7 @@ proc execute*(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
   if gIdeCmd in {ideUse, ideDus}:
     let u = if suggestVersion >= 2: symFromInfo(gTrackPos) else: usageSym
     if u != nil:
-      discard
-      # EpcModeData(u)
+      listUsages(u)
     else:
       localError(gTrackPos, "found no symbol at this position " & $gTrackPos)
 

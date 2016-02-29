@@ -53,7 +53,7 @@ method echoOptions(data: StdinModeData) =
   quit()
 
 method mainCommand(data: StdinModeData) =
-  msgs.writelnHook = proc (msg: string) = discard
+  msgs.writelnHook = (proc (msg: string) = echo msg)
   let prefix = if data.interactive: "> " else: ""
   if data.interactive:
     echo("Running Nimsuggest Stdin Mode")
@@ -64,5 +64,5 @@ method mainCommand(data: StdinModeData) =
   while readLineFromStdin(prefix, line):
     flushFile(stdin)
     parseCmdLine line
-    echo ""
+    echo("\n")
     flushFile(stdout)

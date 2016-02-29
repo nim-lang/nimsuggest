@@ -1,7 +1,7 @@
 import tables, net, parseopt2, strutils
 import ../nimsuggest, commonMode
 import compiler/msgs
-
+from os import nil
 
 const tcpModeHelpMsg = """
 Nimsuggest TCP Mode Switches:
@@ -91,7 +91,7 @@ proc serveAsServer(data: TcpModeData) =
     parseCmdLine inp.string
     stdoutSocket.send("\c\L")
 
-    if data.persist:
+    if not data.persist:
       stdoutSocket.close()
       setupStdoutSocket()
 
@@ -109,10 +109,13 @@ proc serveAsClient(data: TcpModeData) =
 
     try:
       stdoutSocket.readLine(input)
+      if input == "":
+        stdoutSocket = nil
+        continue
       parseCmdLine(string(input))
-      stdoutSocket.send("\c\l")
+      stdoutSocket.send("\c\l\c\l")
     except OSError:
-      stdoutSocket = nil
+      quit()
 
 method mainCommand(data: TcpModeData) =
   msgs.writelnHook = proc (msg: string) = discard
