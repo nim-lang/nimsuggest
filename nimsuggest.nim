@@ -1,3 +1,13 @@
+#
+#
+#           The Nim Compiler
+#        (c) Copyright 2015 Andreas Rumpf
+#
+#    See the file "copying.txt", included in this
+#    distribution, for details about the copyright.
+#
+
+## Nimsuggest is a tool that helps to give editors IDE like capabilities.
 import tables, parseopt2, strutils, os, parseutils, sequtils, net, rdstdin, sexp
 
 import compiler/options, compiler/commands, compiler/modules, compiler/sem,
@@ -68,12 +78,8 @@ method mainCommand(data: ModeData) {.base.} =
 
 
 # Import and add nimsuggest modes
-let modes = newTable[string, ModeInitializer]()
-
 import modes/tcpMode, modes/stdinMode, modes/epcmode
-tcpMode.addModes(modes)
-stdinMode.addModes(modes)
-epcmode.addModes(modes)
+
 
 
 # Command line logic
@@ -100,7 +106,7 @@ proc gatherCmdLineData(): CmdLineData =
       nimsuggestSwitches: @[],
       modeSwitches: @[],
       compilerSwitches: @[],
-      projectPath: ""
+      projectPath: "",
     )
 
   # Get the nimsuggest switches and mode
@@ -145,20 +151,62 @@ proc gatherCmdLineData(): CmdLineData =
     badUsage("Error: Extra switches after project file.")
 
 
+proc oldProcessCmdLine*(): CmdLineData =
+  var parser = initOptParser()
+  result = CmdLineData(
+      mode: "",
+      nimsuggestSwitches: @[],
+      modeSwitches: @[],
+      compilerSwitches: @[],
+      projectPath: "",
+    )
+
+  result.mode = "stdin"
+  result.modeSwitches.add(
+    (cmdLongoption, nnstring("interactive"), nnstring("true"))
+  )
+
+  while true:
+    parser.next()
+    case parser.kind
+    of cmdEnd: break
+    of cmdLongoption, cmdShortOption:
+      case parser.key.normalize
+      of "port", "address":
+        result.mode = "tcp"
+        result.modeSwitches.add(
+          (parser.kind, nnstring(parser.key), nnstring(parser.val))
+        )
+      of "stdin":
+        discard
+      of "epc":
+        result.mode = "epc"
+      of "debug":
+        incl(gGlobalOptions, optIdeDebug)
+      of "v2":
+        suggestVersion = 2
+      else:
+        result.compilerSwitches.add(
+          (parser.kind, nnstring(parser.key), nnstring(parser.val))
+        )
+    of cmdArgument:
+      ifNotNilElse(result.projectPath, unixToNativePath(parser.key), "")
+      # if processArgument(pass, p, argsCount): break
+
+
 proc setupCompiler(projectPath: string) =
     condsyms.initDefines()
     defineSymbol "nimsuggest"
 
-    gProjectName = projectPath
-    echo(projectPath)
+    gProjectName = unixToNativePath(projectPath)
     if gProjectName != "":
       try:
         gProjectFull = canonicalizePath(gProjectName)
       except OSError:
         gProjectFull = gProjectName
+        
       var p = splitFile(gProjectFull)
       gProjectPath = p.dir
-      gProjectName = p.name
     else:
       gProjectPath = getCurrentDir()
 
@@ -189,18 +237,29 @@ proc setupCompiler(projectPath: string) =
 
 
 proc main =
+  var data: ModeData
   if paramCount() == 0:
     echo(helpMsg)
     quit()
 
   # Gather and process command line data
   var cmdLineData = gatherCmdLineData()
-  if not modes.hasKey(cmdLineData.mode.normalize()):
-    badUsage("Error: Unknown mode '" & cmdLineData.mode & "'")
+
+  template getInitializer =
+    case cmdLineData.mode.normalize:
+    of "tcp":
+      data = tcpMode.initializeData()
+    of "stdin":
+      data = stdinMode.initializeData()
+    of "epc":
+      data = epcMode.initializeData()
+
+  getInitializer()
+  if isNil(data):
+    cmdLineData = oldProcessCmdLine()
+    getInitializer()
 
   # Initialize the mode and process global switches.
-  let modeInitializer = modes[cmdLineData.mode.normalize()]
-  var data = modeInitializer()
   data.projectPath = cmdLineData.projectPath
 
   # Process the nimsuggest switches
@@ -242,10 +301,12 @@ proc main =
   for switch in cmdLineData.compilerSwitches:
     commands.processSwitch(switch.key, switch.value, passCmd2, gCmdLineInfo)
 
+  var oldHook = msgs.writelnHook
   msgs.writelnHook = (proc (msg: string) = discard)
   compileProject()
+  msgs.writelnHook = oldHook
   data.mainCommand()
 
-suggestVersion = 2
+suggestVersion = 1
 when isMainModule:
   main()
