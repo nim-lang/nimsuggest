@@ -18,58 +18,49 @@ Nimsuggest TCP Mode Switches:
 """
 
 
-type TcpModeData = ref object of ModeData
+type TcpModeData* = ref object of BaseModeData
   port: Port
-  address: string not nil
+  address: string
   client: bool
   persist: bool
 
 
-proc initializeData*(): ModeData =
-  var res = new(TcpModeData)
-  res.port = Port(0)
-  res.address = ""
-  res.client = false
-
-  result = ModeData(res)
-
-proc addModes*(modes: TableRef[string, ModeInitializer]) =
-  modes["tcp"] = initializeData
-
-
 # ModeData Interface Methods
-method processSwitches(data: TcpModeData, switches: SwitchSequence) =
-  for switch in switches:
+proc initTcpModeData*(cmdline: CmdLineData): TcpModeData =
+  new(result)
+  result.projectPath = cmdline.projectPath
+  result.port = Port(0)
+  result.address = ""
+  result.client = false
+
+  for switch in cmdline.modeSwitches:
     case switch.kind
     of cmdLongOption, cmdShortOption:
       case switch.key.normalize
       of "p", "port":
         try:
-          data.port = Port(parseInt(switch.value))
+          result.port = Port(parseInt(switch.value))
         except ValueError:
           quit("Invalid port:'" & switch.value & "'")
       of "address":
-        data.address = switch.value
+        result.address = switch.value
       of "client":
-        data.client = true
+        result.client = true
       of "persist":
         if switch.value == "":
-          data.persist = true
+          result.persist = true
         else:
           try:
-            data.persist = parseBool(switch.value)
+            result.persist = parseBool(switch.value)
           except ValueError:
             quit("Invalid 'persistance' value '" & switch.value & "'")
       else:
-        echo("Invalid mode switch '$#'" % [switch.key])
-        quit()
+        quit("Invalid mode switch '$#'" % [switch.key])
     else:
       discard
 
-method echoOptions(data: TcpModeData) =
+proc echoTcpModeOptions*() =
   echo(tcpModeHelpMsg)
-  quit()
-
 
 proc serveAsServer(data: TcpModeData) =
   var 
@@ -117,7 +108,7 @@ proc serveAsClient(data: TcpModeData) =
     except OSError:
       quit()
 
-method mainCommand(data: TcpModeData) =
+proc mainCommand*(data: TcpModeData) =
   msgs.writelnHook = proc (msg: string) = discard
   echo("Running Nimsuggest TCP Mode on port $#, address \"$#\"" % [$data.port, data.address])
   echo("Project file: \"$#\"" % [data.projectPath])

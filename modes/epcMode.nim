@@ -18,45 +18,39 @@ Nimsuggest EPC Mode Switches:
 
 
 type
-  EpcModeData = ref object of ModeData
+  EpcModeData* = ref object of BaseModeData
     serverPort: Port
-    address: string not nil
+    address: string
     persist: bool
 
   EUnexpectedCommand = object of Exception
 
-proc initializeData*(): ModeData =
-  var res = new(EpcModeData)
-  res.serverPort = Port(0)
-  res.address = ""
-  result = ModeData(res)
-
-proc addModes*(modes: TableRef[string, ModeInitializer]) =
-  modes["epc"] = initializeData
-
 
 # ModeData Interface Methods
-method processSwitches(data: EpcModeData, switches: SwitchSequence) =
-  for switch in switches:
+proc initEpcModeData*(cmdline: CmdLineData): EpcModeData =
+  new(result)
+  result.projectPath = cmdline.projectPath
+  result.serverPort = Port(0)
+  result.address = ""
+
+  for switch in cmdline.modeSwitches:
     case switch.kind
     of cmdLongOption, cmdShortOption:
       case switch.key.normalize
       of "p", "port":
         try:
-          data.serverPort = Port(parseInt(switch.value))
+          result.serverPort = Port(parseInt(switch.value))
         except ValueError:
           quit("Invalid port:'" & switch.value & "'")
       of "address":
-        data.address = switch.value
+        result.address = switch.value
       else:
-        echo("Invalid mode switch '$#'" % [switch.key])
-        quit()
+        quit("Invalid mode switch '$#'" % [switch.key])
     else:
       discard
 
-method echoOptions(data: EpcModeData) =
+proc echoEpcModeOptions*() =
   echo(epcModeHelpMsg)
-  quit()
 
 proc sexp(s: IdeCmd): SexpNode = sexp($s)
 
@@ -66,14 +60,8 @@ proc sexp(s: Suggest): SexpNode =
   # If you change the oder here, make sure to change it over in
   # nim-mode.el too.
   result = convertSexp([
-    s.section,
-    s.symkind,
-    s.qualifiedPath.map(newSString),
-    s.filePath,
-    s.forth,
-    s.line,
-    s.column,
-    s.doc
+    s.section, s.symkind, s.qualifiedPath.map(newSString), s.filePath,
+    s.forth, s.line, s.column, s.doc
   ])
 
 proc sexp(s: seq[Suggest]): SexpNode =
@@ -111,7 +99,7 @@ proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode,
   socket.send(toHex(len(response), 6))
   socket.send(response)
 
-method mainCommand(data: EpcModeData) =
+proc mainCommand*(data: EpcModeData) =
   var
     client = newSocket()
     server = newSocket()

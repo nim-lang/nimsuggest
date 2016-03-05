@@ -1,4 +1,4 @@
-import strutils, os, parseopt, parseutils, sequtils, net, rdstdin, ../sexp
+import strutils, os, parseopt2, parseutils, sequtils, net, rdstdin, ../sexp
 # Do NOT import suggest. It will lead to wierd bugs with
 # suggestionResultHook, because suggest.nim is included by sigmatch.
 # So we import that one instead.
@@ -16,6 +16,25 @@ else:
 const
   seps = {':', ';', ' ', '\t'}
   
+
+type
+  BaseModeData* = object of RootObj
+    projectPath*: string
+
+  CmdLineData* = ref object
+    mode*: string
+    nimsuggestSwitches*: SwitchSequence
+    modeSwitches*: SwitchSequence
+    compilerSwitches*: SwitchSequence
+    projectPath*: string
+
+  SwitchSequence* = seq[
+    tuple[
+      kind: CmdLineKind,
+      key, value: string
+    ]
+  ] not nil
+
 
 proc parseQuoted*(cmd: string; outp: var string; start: int): int =
   var i = start

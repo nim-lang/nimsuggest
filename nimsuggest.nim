@@ -15,6 +15,8 @@ import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/extccomp, compiler/condsyms, compiler/lists,
   compiler/sigmatch, compiler/ast
 
+import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcmode
+
 const 
   nimsuggestVersion = "0.1.0"
   helpMsg = """
@@ -31,9 +33,9 @@ Options:
 
 Modes:
   tcp            Use text-based input from a tcp socket.
-                 This is the default mode.
   stdin          Use text-based input from stdin (interactive use)
-  epc            Use
+                 This is the default mode.
+  epc            Use epc mode.
 
 In addition, all command line options of Nim that do not affect code generation
 are supported. To pass a Nim compiler command-line argument, prefix it with
@@ -42,60 +44,43 @@ are supported. To pass a Nim compiler command-line argument, prefix it with
 """
 
 type
-  nnstring = string not nil
+  ModeKind = enum
+    mkStdin, mkTcp, mkEpc
 
-  ModeData* = ref object of RootObj
-    mode*: nnstring
-    projectPath*: nnstring
-    protocolVersion: int
-
-  ModeInitializer* = proc (): ModeData
-
-  SwitchSequence* = seq[
-    tuple[
-      kind: CmdLineKind,
-      key, value: nnstring
-    ]
-  ] not nil
-
-  CmdLineData* = object
-    mode: nnstring
-    nimsuggestSwitches: SwitchSequence
-    modeSwitches: SwitchSequence
-    compilerSwitches: SwitchSequence
-    projectPath: nnstring
+  NimsuggestData = ref object of RootObj
+    case mode*: ModeKind
+    of mkStdin:
+      stdinData: StdinModeData
+    of mkTcp:
+      tcpData: TcpModeData
+    of mkEpc:
+      epcData: EpcModeData
 
 
-# ModeData Method Stubs
-method processSwitches(data: ModeData, switches: SwitchSequence) {.base.} =
-  raise newException(ValueError, "Mode doesn't implement processSwitches")
+# ModeData procedures which dispatch into mode-specific procedures.
+proc initModeData(data: NimsuggestData, cmdline: CmdLineData) =
+  case data.mode
+  of mkStdin: 
+    data.stdinData = initStdinModeData(cmdline)
+  of mkTcp: 
+    data.tcpData = initTcpModeData(cmdline)
+  of mkEpc: 
+    data.epcData = initEpcModeData(cmdline)
 
-method echoOptions(data: ModeData) {.base.} =
-  raise newException(ValueError, "Mode doesn't implement echoOptions")
+proc echoOptions(mode: ModeKind) =
+  case mode
+  of mkStdin: echoStdinModeOptions()
+  of mkTcp:   echoTcpModeOptions()
+  of mkEpc:   echoEpcModeOptions()
 
-method mainCommand(data: ModeData) {.base.} =
-  raise newException(ValueError, "Mode doesn't implement mainCommand")
-
-
-# Import and add nimsuggest modes
-import modes/tcpMode, modes/stdinMode, modes/epcmode
-
+proc mainCommand(data: NimsuggestData) =
+  case data.mode
+  of mkStdin: mainCommand(data.stdinData)
+  of mkTcp:   mainCommand(data.tcpData)
+  of mkEpc:   mainCommand(data.epcData)
 
 
 # Command line logic
-proc badUsage(msg: string = nil) =
-  if not isNil(msg):
-    echo(msg)
-  quit()
-
-template ifNotNilElse(a, b, c: untyped): untyped =
-  let value = b
-  if value == nil:
-    a = c
-  else:
-    a = value
-
-
 proc gatherCmdLineData(): CmdLineData =
   ## Gather the command line parameters into an CmdLineData object.
   ## This works in two parts: we first get the global nimsuggest switches and
@@ -118,14 +103,14 @@ proc gatherCmdLineData(): CmdLineData =
       # switches to the compiler.
       if parser.key.startsWith("nim."):
         result.compilerSwitches.add(
-          (parser.kind, nnstring(parser.key[4..^1]), nnstring(parser.val))
+          (parser.kind, parser.key[4..^1], parser.val)
         )
       else:
         result.nimsuggestSwitches.add(
-          (parser.kind, nnstring(parser.key), nnstring(parser.val))
+          (parser.kind, parser.key, parser.val)
         )
     of cmdArgument:
-      ifNotNilElse(result.mode, parser.key, "")
+      result.mode = parser.key
       break
     of cmdEnd:
       break
@@ -136,11 +121,11 @@ proc gatherCmdLineData(): CmdLineData =
     case parser.kind:
     of cmdLongOption, cmdShortOption:
       result.modeSwitches.add(
-        (parser.kind, nnstring(parser.key), nnstring(parser.val))
+        (parser.kind, parser.key, parser.val)
       )
     of cmdArgument:
       # Grab the project file and exit
-      ifNotNilElse(result.projectPath, parser.key, "")
+      result.projectPath = parser.key
       break
     of cmdEnd:
       break
@@ -148,7 +133,7 @@ proc gatherCmdLineData(): CmdLineData =
   # Ensure that there are no remaining arguments
   parser.next()
   if parser.kind != cmdEnd:
-    badUsage("Error: Extra switches after project file.")
+    quit("Error: Extra switches after project file.")
 
 
 proc oldProcessCmdLine*(): CmdLineData =
@@ -163,7 +148,7 @@ proc oldProcessCmdLine*(): CmdLineData =
 
   result.mode = "stdin"
   result.modeSwitches.add(
-    (cmdLongoption, nnstring("interactive"), nnstring("true"))
+    (cmdLongoption, "interactive", "true")
   )
 
   while true:
@@ -175,7 +160,7 @@ proc oldProcessCmdLine*(): CmdLineData =
       of "port", "address":
         result.mode = "tcp"
         result.modeSwitches.add(
-          (parser.kind, nnstring(parser.key), nnstring(parser.val))
+          (parser.kind, parser.key, parser.val)
         )
       of "stdin":
         discard
@@ -187,13 +172,13 @@ proc oldProcessCmdLine*(): CmdLineData =
         suggestVersion = 2
       else:
         result.compilerSwitches.add(
-          (parser.kind, nnstring(parser.key), nnstring(parser.val))
+          (parser.kind, parser.key, parser.val)
         )
     of cmdArgument:
-      ifNotNilElse(result.projectPath, unixToNativePath(parser.key), "")
-      # if processArgument(pass, p, argsCount): break
+      result.projectPath = unixToNativePath(parser.key)
 
 
+# Main setup procs
 proc setupCompiler(projectPath: string) =
     condsyms.initDefines()
     defineSymbol "nimsuggest"
@@ -237,30 +222,20 @@ proc setupCompiler(projectPath: string) =
 
 
 proc main =
-  var data: ModeData
+  var data = NimsuggestData()
   if paramCount() == 0:
-    echo(helpMsg)
-    quit()
+    quit(helpMsg)
 
   # Gather and process command line data
   var cmdLineData = gatherCmdLineData()
-
-  template getInitializer =
-    case cmdLineData.mode.normalize:
-    of "tcp":
-      data = tcpMode.initializeData()
-    of "stdin":
-      data = stdinMode.initializeData()
-    of "epc":
-      data = epcMode.initializeData()
-
-  getInitializer()
-  if isNil(data):
+  if normalize(cmdLineData.mode) notin ["tcp", "epc", "stdin"]:
     cmdLineData = oldProcessCmdLine()
-    getInitializer()
 
-  # Initialize the mode and process global switches.
-  data.projectPath = cmdLineData.projectPath
+  # Get the mode
+  case cmdLineData.mode.normalize
+  of "tcp":   data.mode = mkTcp
+  of "epc":   data.mode = mkEpc
+  of "stdin": data.mode = mkStdin
 
   # Process the nimsuggest switches
   for switch in cmdLineData.nimsuggestSwitches:
@@ -269,13 +244,12 @@ proc main =
       case switch.key.normalize
       of "help", "h":
         echo(helpMsg)
-        data.echoOptions()
-        quit()
+        echoOptions(data.mode)
+        quit(QuitFailure)
       of "v2":
         suggestVersion = 2
       of "version":
-        echo(nimsuggestVersion)
-        quit()
+        quit(nimsuggestVersion)
       else:
         quit("Invalid switch '$#:$#'" % [switch.key, switch.value])
     else:
@@ -284,10 +258,11 @@ proc main =
   # Check for project path here. Checking any earlier leads to --help not
   # working without a project path.
   if cmdLineData.projectPath == "":
-    badUsage("Error: Project path not supplied")
+    quit("Error: Project path not supplied")
 
-  # Process the mode switches
-  data.processSwitches(cmdLineData.modeSwitches)
+  # Initialize mode-specific data
+  # Uses the previously set data.mode
+  data.initModeData(cmdLineData)
 
   # Process the compiler switches
   for switch in cmdLineData.compilerSwitches:

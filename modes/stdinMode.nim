@@ -1,5 +1,5 @@
 import tables, net, parseopt2, strutils, rdstdin
-import ../nimsuggest, commonMode
+import commonMode
 import compiler/msgs
 
 
@@ -16,43 +16,37 @@ to toggle terse mode on/off.
 """
 
 
-type StdinModeData = ref object of ModeData
+type StdinModeData* = ref object of BaseModeData
   interactive: bool
 
 
-proc initializeData*(): ModeData =
-  var res = new(StdinModeData)
-  result = ModeData(res)
-
-proc addModes*(modes: TableRef[string, ModeInitializer]) =
-  modes["stdin"] = initializeData
-
-
 # ModeData Interface Methods
-method processSwitches(data: StdinModeData, switches: SwitchSequence) =
-  for switch in switches:
+proc initStdinModeData*(cmdline: CmdLineData): StdinModeData =
+  new(result)
+  result.projectPath = cmdline.projectPath
+  result.interactive = true
+
+  for switch in cmdline.modeSwitches:
     case switch.kind
     of cmdLongOption, cmdShortOption:
       case switch.key.normalize
       of "interactive", "i":
         if switch.value == "":
-          data.interactive = true
+          result.interactive = true
         else:
           try:
-            data.interactive = parseBool(switch.value)
+            result.interactive = parseBool(switch.value)
           except ValueError:
             quit("Invalid \"interactive\" value \"" & switch.value & "\"")
       else:
-        echo("Invalid mode switch \"$#:$#\"" % [switch.key, switch.value])
-        quit()
+        quit("Invalid mode switch \"$#:$#\"" % [switch.key, switch.value])
     else:
       discard
 
-method echoOptions(data: StdinModeData) =
+proc echoStdinModeOptions*() =
   echo(stdinModeHelpMsg)
-  quit()
 
-method mainCommand(data: StdinModeData) =
+proc mainCommand*(data: StdinModeData) =
   msgs.writelnHook = (proc (msg: string) = echo msg)
   let prefix = if data.interactive: "> " else: ""
   if data.interactive:
