@@ -15,7 +15,7 @@ import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/extccomp, compiler/condsyms, compiler/lists,
   compiler/sigmatch, compiler/ast
 
-import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcmode
+import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcMode
 
 const 
   nimsuggestVersion = "0.1.0"
