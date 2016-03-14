@@ -264,12 +264,12 @@ proc main =
   # Uses the previously set data.mode
   data.initModeData(cmdLineData)
 
+  # Initialize compiler data
+  setupCompiler(cmdLineData.projectPath)
+
   # Process the compiler switches
   for switch in cmdLineData.compilerSwitches:
     commands.processSwitch(switch.key, switch.value, passCmd1, gCmdLineInfo)
-
-  # Initialize Environment
-  setupCompiler(cmdLineData.projectPath)
 
   # Process the command line again, as some parts may have been overridden by
   # configuration files.
