@@ -107,6 +107,7 @@ proc mainCommand*(data: EpcModeData) =
    # Setup server socket
   server.bindaddr(Port(0), data.address)
   let (_, serverPort) = server.getLocalAddr()
+  server.listen()
   echo serverPort
 
   # Wait for connection
