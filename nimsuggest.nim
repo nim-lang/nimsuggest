@@ -157,6 +157,9 @@ proc oldProcessCmdLine*(): CmdLineData =
     of cmdEnd: break
     of cmdLongoption, cmdShortOption:
       case parser.key.normalize
+      of "help", "h":
+        # We display the new help message here.
+        echo(helpMsg)
       of "port", "address":
         result.mode = "tcp"
         result.modeSwitches.add(
