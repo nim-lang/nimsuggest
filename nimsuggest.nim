@@ -81,6 +81,7 @@ proc mainCommand(data: NimsuggestData) =
 
 
 # Command line logic
+
 proc gatherCmdLineData(): CmdLineData =
   ## Gather the command line parameters into an CmdLineData object.
   ## This works in two parts: we first get the global nimsuggest switches and
@@ -95,6 +96,9 @@ proc gatherCmdLineData(): CmdLineData =
     )
 
   # Get the nimsuggest switches and mode
+  # Initial long & short options are stored in nimsuggestSwitches
+  # or compilerSwitches. We end as soon as we get the first
+  # argument, which is the mode.
   while true:
     parser.next()
     case parser.kind
@@ -137,6 +141,8 @@ proc gatherCmdLineData(): CmdLineData =
 
 
 proc oldProcessCmdLine*(): CmdLineData =
+  ## Old-style processing of command line arguments, for backwards
+  ## compatibility. 
   var parser = initOptParser()
   result = CmdLineData(
       mode: "",
@@ -182,46 +188,50 @@ proc oldProcessCmdLine*(): CmdLineData =
 
 
 # Main setup procs
+
 proc setupCompiler(projectPath: string) =
-    condsyms.initDefines()
-    defineSymbol "nimsuggest"
+  ## Setup the various compiler mechanisms.
+  ## This *must* be called before using any compiler procedures, such
+  ## as the processSwitch procedure.
+  condsyms.initDefines()
+  defineSymbol "nimsuggest"
 
-    gProjectName = unixToNativePath(projectPath)
-    if gProjectName != "":
-      try:
-        gProjectFull = canonicalizePath(gProjectName)
-      except OSError:
-        gProjectFull = gProjectName
-        
-      var p = splitFile(gProjectFull)
-      gProjectPath = p.dir
-    else:
-      gProjectPath = getCurrentDir()
+  gProjectName = unixToNativePath(projectPath)
+  if gProjectName != "":
+    try:
+      gProjectFull = canonicalizePath(gProjectName)
+    except OSError:
+      gProjectFull = gProjectName
+      
+    var p = splitFile(gProjectFull)
+    gProjectPath = p.dir
+  else:
+    gProjectPath = getCurrentDir()
 
-    # Find Nim's prefix dir.
-    let binaryPath = findExe("nim")
-    if binaryPath == "":
-      raise newException(IOError,
-          "Cannot find Nim standard library: Nim compiler not in PATH")
-    gPrefixDir = binaryPath.splitPath().head.parentDir()
+  # Find Nim's prefix dir.
+  let binaryPath = findExe("nim")
+  if binaryPath == "":
+    raise newException(IOError,
+        "Cannot find Nim standard library: Nim compiler not in PATH")
+  gPrefixDir = binaryPath.splitPath().head.parentDir()
 
-    # Load the configuration files
-    loadConfigs(DefaultConfig) # load all config files
+  # Load the configuration files
+  loadConfigs(DefaultConfig) # load all config files
 
-    extccomp.initVars()
-    registerPass verbosePass
-    registerPass semPass
+  extccomp.initVars()
+  registerPass verbosePass
+  registerPass semPass
 
-    gCmd = cmdIdeTools
-    gGlobalOptions.incl(optCaasEnabled)
-    isServing = true
-    msgs.gErrorMax = high(int)
+  gCmd = cmdIdeTools
+  gGlobalOptions.incl(optCaasEnabled)
+  isServing = true
+  msgs.gErrorMax = high(int)
 
-    wantMainModule()
-    appendStr(searchPaths, options.libpath)
-    if gProjectFull.len != 0:
-      # current path is always looked first for modules
-      prependStr(searchPaths, gProjectPath)
+  wantMainModule()
+  appendStr(searchPaths, options.libpath)
+  if gProjectFull.len != 0:
+    # current path is always looked first for modules
+    prependStr(searchPaths, gProjectPath)
 
 
 proc main =
