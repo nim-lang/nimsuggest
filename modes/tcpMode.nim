@@ -1,6 +1,7 @@
 import tables, net, parseopt2, strutils
-import ../nimsuggest, commonMode
 import compiler/msgs
+import ../nimsuggest, commonMode
+
 from os import nil
 
 const tcpModeHelpMsg = """

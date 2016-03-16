@@ -15,7 +15,6 @@ import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/extccomp, compiler/condsyms, compiler/lists,
   compiler/sigmatch, compiler/ast
 
-import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcMode
 
 const 
   nimsuggestVersion = "0.1.0"
@@ -25,7 +24,7 @@ Usage:
   nimsuggest [options] [mode] [mode_options] "path/to/projectfile.nim"
 
 Options:
-  --nimPath:"path"      Set the path to the Nim compiler.
+  --nimpath:"path"      Set the path to the Nim compiler.
   --v2                  Use protocol version 2       
   --debug               Enable debug output.
   --help                Print help output for the specified mode.
@@ -47,14 +46,35 @@ type
   ModeKind = enum
     mkStdin, mkTcp, mkEpc
 
-  NimsuggestData = ref object of RootObj
-    case mode*: ModeKind
-    of mkStdin:
-      stdinData: StdinModeData
-    of mkTcp:
-      tcpData: TcpModeData
-    of mkEpc:
-      epcData: EpcModeData
+  BaseModeData* = object of RootObj
+    projectPath*: string
+
+  CmdLineData* = ref object
+    mode*: string
+    nimsuggestSwitches*: SwitchSequence
+    modeSwitches*: SwitchSequence
+    compilerSwitches*: SwitchSequence
+    projectPath*: string
+
+  SwitchSequence* = seq[
+    tuple[
+      kind: CmdLineKind,
+      key, value: string
+    ]
+  ] not nil
+
+
+import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcMode
+
+
+type NimsuggestData = ref object of RootObj
+  case mode*: ModeKind
+  of mkStdin:
+    stdinData: StdinModeData
+  of mkTcp:
+    tcpData: TcpModeData
+  of mkEpc:
+    epcData: EpcModeData
 
 
 # ModeData procedures which dispatch into mode-specific procedures.
@@ -166,6 +186,8 @@ proc oldProcessCmdLine*(): CmdLineData =
       of "help", "h":
         # We display the new help message here.
         echo(helpMsg)
+      of "version":
+        echo(nimsuggestVersion)
       of "port", "address":
         result.mode = "tcp"
         result.modeSwitches.add(

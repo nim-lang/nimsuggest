@@ -15,25 +15,6 @@ else:
 
 const
   seps = {':', ';', ' ', '\t'}
-  
-
-type
-  BaseModeData* = object of RootObj
-    projectPath*: string
-
-  CmdLineData* = ref object
-    mode*: string
-    nimsuggestSwitches*: SwitchSequence
-    modeSwitches*: SwitchSequence
-    compilerSwitches*: SwitchSequence
-    projectPath*: string
-
-  SwitchSequence* = seq[
-    tuple[
-      kind: CmdLineKind,
-      key, value: string
-    ]
-  ] not nil
 
 
 proc parseQuoted*(cmd: string; outp: var string; start: int): int =
