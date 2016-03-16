@@ -182,12 +182,12 @@ proc oldProcessCmdLine*(): CmdLineData =
     case parser.kind
     of cmdEnd: break
     of cmdLongoption, cmdShortOption:
-      case parser.key.normalize
+      case parser.key
       of "help", "h":
         # We display the new help message here.
-        echo(helpMsg)
+        quit(helpMsg)
       of "version":
-        echo(nimsuggestVersion)
+        quit(nimsuggestVersion)
       of "port", "address":
         result.mode = "tcp"
         result.modeSwitches.add(
@@ -211,7 +211,7 @@ proc oldProcessCmdLine*(): CmdLineData =
 
 # Main setup procs
 
-proc setupCompiler(projectPath: string) =
+proc setupCompiler(projectPath, nimPath: string) =
   ## Setup the various compiler mechanisms.
   ## This *must* be called before using any compiler procedures, such
   ## as the processSwitch procedure.
@@ -231,11 +231,14 @@ proc setupCompiler(projectPath: string) =
     gProjectPath = getCurrentDir()
 
   # Find Nim's prefix dir.
-  let binaryPath = findExe("nim")
-  if binaryPath == "":
-    raise newException(IOError,
-        "Cannot find Nim standard library: Nim compiler not in PATH")
-  gPrefixDir = binaryPath.splitPath().head.parentDir()
+  gPrefixDir = nimPath
+  if gPrefixDir == "":
+    let binPath = findExe("nim")
+    if binPath == "":
+      raise newException(
+        IOError, "Cannot find Nim standard library: Nim compiler not in PATH"
+      )
+    gPrefixDir = binPath.splitPath().head.parentDir()
 
   # Load the configuration files
   loadConfigs(DefaultConfig) # load all config files
@@ -257,26 +260,29 @@ proc setupCompiler(projectPath: string) =
 
 
 proc main =
-  var data = NimsuggestData()
+  var
+      data = NimsuggestData()
+      nimPath = ""
+
   if paramCount() == 0:
     quit(helpMsg)
 
   # Gather and process command line data
   var cmdLineData = gatherCmdLineData()
-  if normalize(cmdLineData.mode) notin ["tcp", "epc", "stdin"]:
-    cmdLineData = oldProcessCmdLine()
 
   # Get the mode
-  case cmdLineData.mode.normalize
+  case cmdLineData.mode
   of "tcp":   data.mode = mkTcp
   of "epc":   data.mode = mkEpc
   of "stdin": data.mode = mkStdin
+  else:
+    cmdLineData = oldProcessCmdLine()
 
   # Process the nimsuggest switches
   for switch in cmdLineData.nimsuggestSwitches:
     case switch.kind
     of cmdLongOption:
-      case switch.key.normalize
+      case switch.key
       of "help", "h":
         echo(helpMsg)
         echoOptions(data.mode)
@@ -285,6 +291,9 @@ proc main =
         suggestVersion = 2
       of "version":
         quit(nimsuggestVersion)
+      of "nimpath":
+        echo(switch.value)
+        discard parseQuoted(switch.value, nimPath, 0)
       else:
         quit("Invalid switch '$#:$#'" % [switch.key, switch.value])
     else:
@@ -300,7 +309,7 @@ proc main =
   data.initModeData(cmdLineData)
 
   # Initialize compiler data
-  setupCompiler(cmdLineData.projectPath)
+  setupCompiler(cmdLineData.projectPath, nimPath)
 
   # Process the compiler switches
   for switch in cmdLineData.compilerSwitches:
