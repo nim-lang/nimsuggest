@@ -278,8 +278,8 @@ proc serveEpc(server: Socket) =
     checkSanity(client, sizeHex, size, messageBuffer)
     let
       message = parseSexp($messageBuffer)
-      messageType = message[0].getSymbol
-    case messageType:
+      epcAPI = message[0].getSymbol
+    case epcAPI:
     of "call":
       let
         uid = message[1].getNum
@@ -305,11 +305,11 @@ proc serveEpc(server: Socket) =
       stderr.writeline("recieved epc error: " & $messageBuffer)
       raise newException(IOError, "epc error")
     else:
-      let errMessage = case messageType
+      let errMessage = case epcAPI
                        of "return", "return-error":
                          "no return expected"
                        else:
-                         "unexpected call: " & messageType
+                         "unexpected call: " & epcAPI
       raise newException(EUnexpectedCommand, errMessage)
 
 proc mainCommand =
