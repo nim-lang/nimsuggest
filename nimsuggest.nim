@@ -186,6 +186,9 @@ template checkSanity(client, sizeHex, size, messageBuffer: typed) =
   if client.recv(messageBuffer, size) != size:
     raise newException(ValueError, "didn't get all the bytes")
 
+template setVerbosity(level: typed) =
+  gVerbosity = level
+  gNotes = NotesVerbosity[gVerbosity]
 
 proc connectToNextFreePort(server: Socket, host: string): Port =
   server.bindaddr(Port(0), host)
@@ -292,6 +295,7 @@ proc serveEpc(server: Socket) =
         var hints_or_errors = ""
         sendEPC(hints_or_errors, string, msgs.writelnHook)
       of ideSug, ideCon, ideDef, ideUse, ideDus:
+        setVerbosity(0)
         var suggests: seq[Suggest] = @[]
         sendEPC(suggests, Suggest, suggestionResultHook)
       else: discard
