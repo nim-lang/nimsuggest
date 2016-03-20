@@ -267,14 +267,15 @@ proc serveEpc(server: Socket) =
       messageType = message[0].getSymbol
     case messageType:
     of "call":
-      var results: seq[Suggest] = @[]
-      suggestionResultHook = proc (s: Suggest) =
-        results.add(s)
-
       let
         uid = message[1].getNum
         cmd = parseIdeCmd(message[2].getSymbol)
         args = message[3]
+
+      var results: seq[Suggest] = @[]
+      suggestionResultHook = proc (s: Suggest) =
+        results.add(s)
+
       executeEPC(cmd, args)
       returnEPC(client, uid, sexp(results))
     of "return":
