@@ -73,7 +73,7 @@ proc parseQuoted(cmd: string; outp: var string; start: int): int =
 proc sexp(s: IdeCmd|TSymKind): SexpNode = sexp($s)
 
 proc sexp(s: Suggest): SexpNode =
-  # If you change the oder here, make sure to change it over in
+  # If you change the order here, make sure to change it over in
   # nim-mode.el too.
   result = convertSexp([
     s.section,
