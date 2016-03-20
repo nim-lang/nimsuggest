@@ -290,6 +290,7 @@ proc serveEpc(server: Socket) =
 
       case gIdeCmd
       of ideChk:
+        setVerbosity(1)
         # Use full path because other emacs plugins depends it
         gListFullPaths = true
         incl(gGlobalOptions, optIdeDebug)
