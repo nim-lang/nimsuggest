@@ -267,7 +267,6 @@ proc serveTcp() =
     stdoutSocket.close()
 
 proc serveEpc(server: Socket) =
-  var inp = "".TaintedString
   var client = newSocket()
   # Wait for connection
   accept(server, client)
