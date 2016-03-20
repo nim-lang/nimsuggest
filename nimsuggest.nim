@@ -161,11 +161,22 @@ proc executeEPC(cmd: IdeCmd, args: SexpNode) =
     dirtyfile = args[3].getStr(nil)
   execute(cmd, file, dirtyfile, int(line), int(column))
 
-proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode,
+proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode|string,
                return_symbol = "return") =
   let response = $convertSexp([newSSymbol(return_symbol), uid, s])
   socket.send(toHex(len(response), 6))
   socket.send(response)
+
+template sendEPC(results: typed, tdef, hook: untyped) =
+  hook = proc (s: tdef) =
+    results.add(
+      # Put newlines to parse output by flycheck-nim.el
+      when results is string: s & "\n"
+      else: s
+    )
+
+  executeEPC(gIdeCmd, args)
+  returnEPC(client, uid, sexp(results))
 
 template checkSanity(client, sizeHex, size, messageBuffer: typed) =
   if client.recv(sizeHex, 6) != 6:
@@ -272,12 +283,18 @@ proc serveEpc(server: Socket) =
         args = message[3]
 
       gIdeCmd = parseIdeCmd(message[2].getSymbol)
-      var results: seq[Suggest] = @[]
-      suggestionResultHook = proc (s: Suggest) =
-        results.add(s)
 
-      executeEPC(gIdeCmd, args)
-      returnEPC(client, uid, sexp(results))
+      case gIdeCmd
+      of ideChk:
+        # Use full path because other emacs plugins depends it
+        gListFullPaths = true
+        incl(gGlobalOptions, optIdeDebug)
+        var hints_or_errors = ""
+        sendEPC(hints_or_errors, string, msgs.writelnHook)
+      of ideSug, ideCon, ideDef, ideUse, ideDus:
+        var suggests: seq[Suggest] = @[]
+        sendEPC(suggests, Suggest, suggestionResultHook)
+      else: discard
     of "methods":
       returnEPC(client, message[1].getNum, listEPC())
     of "epc-error":
