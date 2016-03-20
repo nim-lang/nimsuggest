@@ -92,11 +92,12 @@ proc sexp(s: seq[Suggest]): SexpNode =
     result.add(sexp(sug))
 
 proc listEPC(): SexpNode =
+  # This function is called from Emacs to show available options.
   let
     argspecs = sexp("file line column dirtyfile".split(" ").map(newSSymbol))
     docstring = sexp("line starts at 1, column at 0, dirtyfile is optional")
   result = newSList()
-  for command in ["sug", "con", "def", "use", "dus"]:
+  for command in ["sug", "con", "def", "use", "dus", "chk"]:
     let
       cmd = sexp(command)
       methodDesc = newSList()
