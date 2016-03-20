@@ -269,14 +269,14 @@ proc serveEpc(server: Socket) =
     of "call":
       let
         uid = message[1].getNum
-        cmd = parseIdeCmd(message[2].getSymbol)
         args = message[3]
 
+      gIdeCmd = parseIdeCmd(message[2].getSymbol)
       var results: seq[Suggest] = @[]
       suggestionResultHook = proc (s: Suggest) =
         results.add(s)
 
-      executeEPC(cmd, args)
+      executeEPC(gIdeCmd, args)
       returnEPC(client, uid, sexp(results))
     of "return":
       raise newException(EUnexpectedCommand, "no return expected")
