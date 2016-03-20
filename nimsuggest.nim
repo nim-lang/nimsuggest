@@ -70,9 +70,7 @@ proc parseQuoted(cmd: string; outp: var string; start: int): int =
     i += parseUntil(cmd, outp, seps, i)
   result = i
 
-proc sexp(s: IdeCmd): SexpNode = sexp($s)
-
-proc sexp(s: TSymKind): SexpNode = sexp($s)
+proc sexp(s: IdeCmd|TSymKind): SexpNode = sexp($s)
 
 proc sexp(s: Suggest): SexpNode =
   # If you change the oder here, make sure to change it over in
