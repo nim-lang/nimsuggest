@@ -70,12 +70,10 @@ proc parseQuoted(cmd: string; outp: var string; start: int): int =
     i += parseUntil(cmd, outp, seps, i)
   result = i
 
-proc sexp(s: IdeCmd): SexpNode = sexp($s)
-
-proc sexp(s: TSymKind): SexpNode = sexp($s)
+proc sexp(s: IdeCmd|TSymKind): SexpNode = sexp($s)
 
 proc sexp(s: Suggest): SexpNode =
-  # If you change the oder here, make sure to change it over in
+  # If you change the order here, make sure to change it over in
   # nim-mode.el too.
   result = convertSexp([
     s.section,
@@ -94,11 +92,12 @@ proc sexp(s: seq[Suggest]): SexpNode =
     result.add(sexp(sug))
 
 proc listEPC(): SexpNode =
+  # This function is called from Emacs to show available options.
   let
     argspecs = sexp("file line column dirtyfile".split(" ").map(newSSymbol))
     docstring = sexp("line starts at 1, column at 0, dirtyfile is optional")
   result = newSList()
-  for command in ["sug", "con", "def", "use", "dus"]:
+  for command in ["sug", "con", "def", "use", "dus", "chk"]:
     let
       cmd = sexp(command)
       methodDesc = newSList()
@@ -163,12 +162,34 @@ proc executeEPC(cmd: IdeCmd, args: SexpNode) =
     dirtyfile = args[3].getStr(nil)
   execute(cmd, file, dirtyfile, int(line), int(column))
 
-proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode,
+proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode|string,
                return_symbol = "return") =
   let response = $convertSexp([newSSymbol(return_symbol), uid, s])
   socket.send(toHex(len(response), 6))
   socket.send(response)
 
+template sendEPC(results: typed, tdef, hook: untyped) =
+  hook = proc (s: tdef) =
+    results.add(
+      # Put newlines to parse output by flycheck-nim.el
+      when results is string: s & "\n"
+      else: s
+    )
+
+  executeEPC(gIdeCmd, args)
+  returnEPC(client, uid, sexp(results))
+
+template checkSanity(client, sizeHex, size, messageBuffer: typed) =
+  if client.recv(sizeHex, 6) != 6:
+    raise newException(ValueError, "didn't get all the hexbytes")
+  if parseHex(sizeHex, size) == 0:
+    raise newException(ValueError, "invalid size hex: " & $sizeHex)
+  if client.recv(messageBuffer, size) != size:
+    raise newException(ValueError, "didn't get all the bytes")
+
+template setVerbosity(level: typed) =
+  gVerbosity = level
+  gNotes = NotesVerbosity[gVerbosity]
 
 proc connectToNextFreePort(server: Socket, host: string): Port =
   server.bindaddr(Port(0), host)
@@ -246,46 +267,51 @@ proc serveTcp() =
     stdoutSocket.close()
 
 proc serveEpc(server: Socket) =
-  var inp = "".TaintedString
   var client = newSocket()
   # Wait for connection
   accept(server, client)
   while true:
-    var sizeHex = ""
-    if client.recv(sizeHex, 6) != 6:
-      raise newException(ValueError, "didn't get all the hexbytes")
-    var size = 0
-    if parseHex(sizeHex, size) == 0:
-      raise newException(ValueError, "invalid size hex: " & $sizeHex)
-    var messageBuffer = ""
-    if client.recv(messageBuffer, size) != size:
-      raise newException(ValueError, "didn't get all the bytes")
+    var
+      sizeHex = ""
+      size = 0
+      messageBuffer = ""
+    checkSanity(client, sizeHex, size, messageBuffer)
     let
       message = parseSexp($messageBuffer)
-      messageType = message[0].getSymbol
-    case messageType:
+      epcAPI = message[0].getSymbol
+    case epcAPI:
     of "call":
-      var results: seq[Suggest] = @[]
-      suggestionResultHook = proc (s: Suggest) =
-        results.add(s)
-
       let
         uid = message[1].getNum
-        cmd = parseIdeCmd(message[2].getSymbol)
         args = message[3]
-      executeEPC(cmd, args)
-      returnEPC(client, uid, sexp(results))
-    of "return":
-      raise newException(EUnexpectedCommand, "no return expected")
-    of "return-error":
-      raise newException(EUnexpectedCommand, "no return expected")
+
+      gIdeCmd = parseIdeCmd(message[2].getSymbol)
+
+      case gIdeCmd
+      of ideChk:
+        setVerbosity(1)
+        # Use full path because other emacs plugins depends it
+        gListFullPaths = true
+        incl(gGlobalOptions, optIdeDebug)
+        var hints_or_errors = ""
+        sendEPC(hints_or_errors, string, msgs.writelnHook)
+      of ideSug, ideCon, ideDef, ideUse, ideDus:
+        setVerbosity(0)
+        var suggests: seq[Suggest] = @[]
+        sendEPC(suggests, Suggest, suggestionResultHook)
+      else: discard
+    of "methods":
+      returnEPC(client, message[1].getNum, listEPC())
     of "epc-error":
       stderr.writeline("recieved epc error: " & $messageBuffer)
       raise newException(IOError, "epc error")
-    of "methods":
-      returnEPC(client, message[1].getNum, listEPC())
     else:
-      raise newException(EUnexpectedCommand, "unexpected call: " & messageType)
+      let errMessage = case epcAPI
+                       of "return", "return-error":
+                         "no return expected"
+                       else:
+                         "unexpected call: " & epcAPI
+      raise newException(EUnexpectedCommand, errMessage)
 
 proc mainCommand =
   registerPass verbosePass
