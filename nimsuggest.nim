@@ -8,407 +8,324 @@
 #
 
 ## Nimsuggest is a tool that helps to give editors IDE like capabilities.
+import tables, parseopt2, strutils, os, parseutils, sequtils, net, rdstdin, sexp
 
-import strutils, os, parseopt, parseutils, sequtils, net, rdstdin, sexp
-# Do NOT import suggest. It will lead to wierd bugs with
-# suggestionResultHook, because suggest.nim is included by sigmatch.
-# So we import that one instead.
 import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/passes, compiler/passaux, compiler/msgs, compiler/nimconf,
   compiler/extccomp, compiler/condsyms, compiler/lists,
   compiler/sigmatch, compiler/ast
 
-when defined(windows):
-  import winlean
-else:
-  import posix
 
-const Usage = """
+const 
+  nimsuggestVersion = "0.1.0"
+  helpMsg = """
 Nimsuggest - Tool to give every editor IDE like capabilities for Nim
 Usage:
-  nimsuggest [options] projectfile.nim
+  nimsuggest [options] [mode] [mode_options] "path/to/projectfile.nim"
 
 Options:
-  --port:PORT             port, by default 6000
-  --address:HOST          binds to that address, by default ""
-  --stdin                 read commands from stdin and write results to
-                          stdout instead of using sockets
-  --epc                   use emacs epc mode
-  --debug                 enable debug output
-  --v2                    use version 2 of the protocol; more features and
-                          much faster
+  --nimpath:"path"      Set the path to the Nim compiler.
+  --v2                  Use protocol version 2       
+  --debug               Enable debug output.
+  --help                Print help output for the specified mode.
+  --version             Print nimsuggest version to stdout, then quit.
 
-The server then listens to the connection and takes line-based commands.
+Modes:
+  tcp            Use text-based input from a tcp socket.
+  stdin          Use text-based input from stdin (interactive use)
+                 This is the default mode.
+  epc            Use epc mode.
 
 In addition, all command line options of Nim that do not affect code generation
-are supported.
+are supported. To pass a Nim compiler command-line argument, prefix it with
+"nim." when passing global options, for example:
+  nimsuggest --nim.define:release tcp projectfile.nim
 """
-type
-  Mode = enum mstdin, mtcp, mepc
-
-var
-  gPort = 6000.Port
-  gAddress = ""
-  gMode: Mode
-
-const
-  seps = {':', ';', ' ', '\t'}
-  Help = "usage: sug|con|def|use|dus|chk|highlight|outline file.nim[;dirtyfile.nim]:line:col\n" &
-         "type 'quit' to quit\n" &
-         "type 'debug' to toggle debug mode on/off\n" &
-         "type 'terse' to toggle terse mode on/off"
 
 type
-  EUnexpectedCommand = object of Exception
+  ModeKind = enum
+    mkStdin, mkTcp, mkEpc
 
-proc parseQuoted(cmd: string; outp: var string; start: int): int =
-  var i = start
-  i += skipWhitespace(cmd, i)
-  if cmd[i] == '"':
-    i += parseUntil(cmd, outp, '"', i+1)+2
-  else:
-    i += parseUntil(cmd, outp, seps, i)
-  result = i
+  BaseModeData* = object of RootObj
+    projectPath*: string
 
-proc sexp(s: IdeCmd|TSymKind): SexpNode = sexp($s)
+  CmdLineData* = ref object
+    mode*: string
+    nimsuggestSwitches*: SwitchSequence
+    modeSwitches*: SwitchSequence
+    compilerSwitches*: SwitchSequence
+    projectPath*: string
 
-proc sexp(s: Suggest): SexpNode =
-  # If you change the order here, make sure to change it over in
-  # nim-mode.el too.
-  result = convertSexp([
-    s.section,
-    s.symkind,
-    s.qualifiedPath.map(newSString),
-    s.filePath,
-    s.forth,
-    s.line,
-    s.column,
-    s.doc
-  ])
+  SwitchSequence* = seq[
+    tuple[
+      kind: CmdLineKind,
+      key, value: string
+    ]
+  ] not nil
 
-proc sexp(s: seq[Suggest]): SexpNode =
-  result = newSList()
-  for sug in s:
-    result.add(sexp(sug))
 
-proc listEPC(): SexpNode =
-  # This function is called from Emacs to show available options.
-  let
-    argspecs = sexp("file line column dirtyfile".split(" ").map(newSSymbol))
-    docstring = sexp("line starts at 1, column at 0, dirtyfile is optional")
-  result = newSList()
-  for command in ["sug", "con", "def", "use", "dus", "chk"]:
-    let
-      cmd = sexp(command)
-      methodDesc = newSList()
-    methodDesc.add(cmd)
-    methodDesc.add(argspecs)
-    methodDesc.add(docstring)
-    result.add(methodDesc)
+import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcMode
 
-proc findNode(n: PNode): PSym =
-  #echo "checking node ", n.info
-  if n.kind == nkSym:
-    if isTracked(n.info, n.sym.name.s.len): return n.sym
-  else:
-    for i in 0 ..< safeLen(n):
-      let res = n.sons[i].findNode
-      if res != nil: return res
 
-proc symFromInfo(gTrackPos: TLineInfo): PSym =
-  let m = getModule(gTrackPos.fileIndex)
-  #echo m.isNil, " I knew it ", gTrackPos.fileIndex
-  if m != nil and m.ast != nil:
-    result = m.ast.findNode
+type NimsuggestData = ref object of RootObj
+  case mode*: ModeKind
+  of mkStdin:
+    stdinData: StdinModeData
+  of mkTcp:
+    tcpData: TcpModeData
+  of mkEpc:
+    epcData: EpcModeData
 
-proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
-  gIdeCmd = cmd
-  if cmd == ideUse and suggestVersion != 2:
-    modules.resetAllModules()
-  var isKnownFile = true
-  let dirtyIdx = file.fileInfoIdx(isKnownFile)
 
-  if dirtyfile.len != 0: msgs.setDirtyFile(dirtyIdx, dirtyfile)
-  else: msgs.setDirtyFile(dirtyIdx, nil)
+# ModeData procedures which dispatch into mode-specific procedures.
+proc initModeData(data: NimsuggestData, cmdline: CmdLineData) =
+  case data.mode
+  of mkStdin: 
+    data.stdinData = initStdinModeData(cmdline)
+  of mkTcp: 
+    data.tcpData = initTcpModeData(cmdline)
+  of mkEpc: 
+    data.epcData = initEpcModeData(cmdline)
 
-  gTrackPos = newLineInfo(dirtyIdx, line, col)
-  gErrorCounter = 0
-  if suggestVersion < 2:
-    usageSym = nil
-  if not isKnownFile:
-    compileProject()
-  if suggestVersion == 2 and gIdeCmd in {ideDef, ideUse, ideDus} and
-      dirtyfile.len == 0:
-    discard "no need to recompile anything"
-  else:
-    resetModule dirtyIdx
-    if dirtyIdx != gProjectMainIdx:
-      resetModule gProjectMainIdx
-    compileProject(dirtyIdx)
-  if gIdeCmd in {ideUse, ideDus}:
-    let u = if suggestVersion >= 2: symFromInfo(gTrackPos) else: usageSym
-    if u != nil:
-      listUsages(u)
-    else:
-      localError(gTrackPos, "found no symbol at this position " & $gTrackPos)
+proc echoOptions(mode: ModeKind) =
+  case mode
+  of mkStdin: echoStdinModeOptions()
+  of mkTcp:   echoTcpModeOptions()
+  of mkEpc:   echoEpcModeOptions()
 
-proc executeEPC(cmd: IdeCmd, args: SexpNode) =
-  let
-    file = args[0].getStr
-    line = args[1].getNum
-    column = args[2].getNum
-  var dirtyfile = ""
-  if len(args) > 3:
-    dirtyfile = args[3].getStr(nil)
-  execute(cmd, file, dirtyfile, int(line), int(column))
+proc mainCommand(data: NimsuggestData) =
+  case data.mode
+  of mkStdin: mainCommand(data.stdinData)
+  of mkTcp:   mainCommand(data.tcpData)
+  of mkEpc:   mainCommand(data.epcData)
 
-proc returnEPC(socket: var Socket, uid: BiggestInt, s: SexpNode|string,
-               return_symbol = "return") =
-  let response = $convertSexp([newSSymbol(return_symbol), uid, s])
-  socket.send(toHex(len(response), 6))
-  socket.send(response)
 
-template sendEPC(results: typed, tdef, hook: untyped) =
-  hook = proc (s: tdef) =
-    results.add(
-      # Put newlines to parse output by flycheck-nim.el
-      when results is string: s & "\n"
-      else: s
+# Command line logic
+
+proc gatherCmdLineData(): CmdLineData =
+  ## Gather the command line parameters into an CmdLineData object.
+  ## This works in two parts: we first get the global nimsuggest switches and
+  ## mode, then get the mode switches and project file.
+  var parser = initOptParser()
+  result = CmdLineData(
+      mode: "",
+      nimsuggestSwitches: @[],
+      modeSwitches: @[],
+      compilerSwitches: @[],
+      projectPath: "",
     )
 
-  executeEPC(gIdeCmd, args)
-  returnEPC(client, uid, sexp(results))
+  # Get the nimsuggest switches and mode
+  # Initial long & short options are stored in nimsuggestSwitches
+  # or compilerSwitches. We end as soon as we get the first
+  # argument, which is the mode.
+  while true:
+    parser.next()
+    case parser.kind
+    of cmdLongOption, cmdShortOption:
+      # We filter global switches here to allow the user to pass
+      # switches to the compiler.
+      if parser.key.startsWith("nim."):
+        result.compilerSwitches.add(
+          (parser.kind, parser.key[4..^1], parser.val)
+        )
+      else:
+        result.nimsuggestSwitches.add(
+          (parser.kind, parser.key, parser.val)
+        )
+    of cmdArgument:
+      result.mode = parser.key
+      break
+    of cmdEnd:
+      break
 
-template checkSanity(client, sizeHex, size, messageBuffer: typed) =
-  if client.recv(sizeHex, 6) != 6:
-    raise newException(ValueError, "didn't get all the hexbytes")
-  if parseHex(sizeHex, size) == 0:
-    raise newException(ValueError, "invalid size hex: " & $sizeHex)
-  if client.recv(messageBuffer, size) != size:
-    raise newException(ValueError, "didn't get all the bytes")
+  # Process the remaining mode switches and project file.
+  while true:
+    parser.next()
+    case parser.kind:
+    of cmdLongOption, cmdShortOption:
+      result.modeSwitches.add(
+        (parser.kind, parser.key, parser.val)
+      )
+    of cmdArgument:
+      # Grab the project file and exit
+      result.projectPath = parser.key
+      break
+    of cmdEnd:
+      break
 
-template setVerbosity(level: typed) =
-  gVerbosity = level
-  gNotes = NotesVerbosity[gVerbosity]
+  # Ensure that there are no remaining arguments
+  parser.next()
+  if parser.kind != cmdEnd:
+    quit("Error: Extra switches after project file.")
 
-proc connectToNextFreePort(server: Socket, host: string): Port =
-  server.bindaddr(Port(0), host)
-  let (_, port) = server.getLocalAddr
-  result = port
 
-proc parseCmdLine(cmd: string) =
-  template toggle(sw) =
-    if sw in gGlobalOptions:
-      excl(gGlobalOptions, sw)
-    else:
-      incl(gGlobalOptions, sw)
-    return
+proc oldProcessCmdLine*(): CmdLineData =
+  ## Old-style processing of command line arguments, for backwards
+  ## compatibility. 
+  var parser = initOptParser()
+  result = CmdLineData(
+      mode: "",
+      nimsuggestSwitches: @[],
+      modeSwitches: @[],
+      compilerSwitches: @[],
+      projectPath: "",
+    )
 
-  template err() =
-    echo Help
-    return
-
-  var opc = ""
-  var i = parseIdent(cmd, opc, 0)
-  case opc.normalize
-  of "sug": gIdeCmd = ideSug
-  of "con": gIdeCmd = ideCon
-  of "def": gIdeCmd = ideDef
-  of "use": gIdeCmd = ideUse
-  of "dus": gIdeCmd = ideDus
-  of "chk":
-    gIdeCmd = ideChk
-    incl(gGlobalOptions, optIdeDebug)
-  of "highlight": gIdeCmd = ideHighlight
-  of "outline": gIdeCmd = ideOutline
-  of "quit": quit()
-  of "debug": toggle optIdeDebug
-  of "terse": toggle optIdeTerse
-  else: err()
-  var dirtyfile = ""
-  var orig = ""
-  i = parseQuoted(cmd, orig, i)
-  if cmd[i] == ';':
-    i = parseQuoted(cmd, dirtyfile, i+1)
-  i += skipWhile(cmd, seps, i)
-  var line = -1
-  var col = 0
-  i += parseInt(cmd, line, i)
-  i += skipWhile(cmd, seps, i)
-  i += parseInt(cmd, col, i)
-
-  execute(gIdeCmd, orig, dirtyfile, line, col-1)
-
-proc serveStdin() =
-  echo Help
-  var line = ""
-  while readLineFromStdin("> ", line):
-    parseCmdLine line
-    echo ""
-    flushFile(stdout)
-
-proc serveTcp() =
-  var server = newSocket()
-  server.bindAddr(gPort, gAddress)
-  var inp = "".TaintedString
-  server.listen()
+  result.mode = "stdin"
+  result.modeSwitches.add(
+    (cmdLongoption, "interactive", "true")
+  )
 
   while true:
-    var stdoutSocket = newSocket()
-    msgs.writelnHook = proc (line: string) =
-      stdoutSocket.send(line & "\c\L")
-
-    accept(server, stdoutSocket)
-
-    stdoutSocket.readLine(inp)
-    parseCmdLine inp.string
-
-    stdoutSocket.send("\c\L")
-    stdoutSocket.close()
-
-proc serveEpc(server: Socket) =
-  var client = newSocket()
-  # Wait for connection
-  accept(server, client)
-  while true:
-    var
-      sizeHex = ""
-      size = 0
-      messageBuffer = ""
-    checkSanity(client, sizeHex, size, messageBuffer)
-    let
-      message = parseSexp($messageBuffer)
-      epcAPI = message[0].getSymbol
-    case epcAPI:
-    of "call":
-      let
-        uid = message[1].getNum
-        args = message[3]
-
-      gIdeCmd = parseIdeCmd(message[2].getSymbol)
-
-      case gIdeCmd
-      of ideChk:
-        setVerbosity(1)
-        # Use full path because other emacs plugins depends it
-        gListFullPaths = true
+    parser.next()
+    case parser.kind
+    of cmdEnd: break
+    of cmdLongoption, cmdShortOption:
+      case parser.key
+      of "help", "h":
+        # We display the new help message here.
+        quit(helpMsg)
+      of "version":
+        quit(nimsuggestVersion)
+      of "port", "address":
+        result.mode = "tcp"
+        result.modeSwitches.add(
+          (parser.kind, parser.key, parser.val)
+        )
+      of "stdin":
+        discard
+      of "epc":
+        result.mode = "epc"
+      of "debug":
         incl(gGlobalOptions, optIdeDebug)
-        var hints_or_errors = ""
-        sendEPC(hints_or_errors, string, msgs.writelnHook)
-      of ideSug, ideCon, ideDef, ideUse, ideDus:
-        setVerbosity(0)
-        var suggests: seq[Suggest] = @[]
-        sendEPC(suggests, Suggest, suggestionResultHook)
-      else: discard
-    of "methods":
-      returnEPC(client, message[1].getNum, listEPC())
-    of "epc-error":
-      stderr.writeline("recieved epc error: " & $messageBuffer)
-      raise newException(IOError, "epc error")
-    else:
-      let errMessage = case epcAPI
-                       of "return", "return-error":
-                         "no return expected"
-                       else:
-                         "unexpected call: " & epcAPI
-      raise newException(EUnexpectedCommand, errMessage)
+      of "v2":
+        suggestVersion = 2
+      else:
+        result.compilerSwitches.add(
+          (parser.kind, parser.key, parser.val)
+        )
+    of cmdArgument:
+      result.projectPath = unixToNativePath(parser.key)
 
-proc mainCommand =
+
+# Main setup procs
+
+proc setupCompiler(projectPath, nimPath: string) =
+  ## Setup the various compiler mechanisms.
+  ## This *must* be called before using any compiler procedures, such
+  ## as the processSwitch procedure.
+  condsyms.initDefines()
+  defineSymbol "nimsuggest"
+
+  gProjectName = unixToNativePath(projectPath)
+  if gProjectName != "":
+    try:
+      gProjectFull = canonicalizePath(gProjectName)
+    except OSError:
+      gProjectFull = gProjectName
+      
+    var p = splitFile(gProjectFull)
+    gProjectPath = p.dir
+  else:
+    gProjectPath = getCurrentDir()
+
+  # Find Nim's prefix dir.
+  gPrefixDir = nimPath
+  if gPrefixDir == "":
+    let binPath = findExe("nim")
+    if binPath == "":
+      raise newException(
+        IOError, "Cannot find Nim standard library: Nim compiler not in PATH"
+      )
+    gPrefixDir = binPath.splitPath().head.parentDir()
+
+  # Load the configuration files
+  loadConfigs(DefaultConfig) # load all config files
+
+  extccomp.initVars()
   registerPass verbosePass
   registerPass semPass
+
   gCmd = cmdIdeTools
-  incl gGlobalOptions, optCaasEnabled
+  gGlobalOptions.incl(optCaasEnabled)
   isServing = true
+  msgs.gErrorMax = high(int)
+
   wantMainModule()
   appendStr(searchPaths, options.libpath)
   if gProjectFull.len != 0:
     # current path is always looked first for modules
     prependStr(searchPaths, gProjectPath)
 
-  # do not stop after the first error:
-  msgs.gErrorMax = high(int)
 
-  case gMode
-  of mstdin:
-    compileProject()
-    serveStdin()
-  of mtcp:
-    # until somebody accepted the connection, produce no output (logging is too
-    # slow for big projects):
-    msgs.writelnHook = proc (msg: string) = discard
-    compileProject()
-    serveTcp()
-  of mepc:
-    var server = newSocket()
-    let port = connectToNextFreePort(server, "localhost")
-    server.listen()
-    echo port
-    compileProject()
-    serveEpc(server)
+proc main =
+  var
+      data = NimsuggestData()
+      nimPath = ""
 
-proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
-  var p = parseopt.initOptParser(cmd)
-  while true:
-    parseopt.next(p)
-    case p.kind
-    of cmdEnd: break
-    of cmdLongoption, cmdShortOption:
-      case p.key.normalize
-      of "port":
-        gPort = parseInt(p.val).Port
-        gMode = mtcp
-      of "address":
-        gAddress = p.val
-        gMode = mtcp
-      of "stdin": gMode = mstdin
-      of "epc":
-        gMode = mepc
-        gVerbosity = 0          # Port number gotta be first.
-      of "debug":
-        incl(gGlobalOptions, optIdeDebug)
+  if paramCount() == 0:
+    quit(helpMsg)
+
+  # Gather and process command line data
+  var cmdLineData = gatherCmdLineData()
+
+  # Get the mode
+  case cmdLineData.mode
+  of "tcp":   data.mode = mkTcp
+  of "epc":   data.mode = mkEpc
+  of "stdin": data.mode = mkStdin
+  else:
+    cmdLineData = oldProcessCmdLine()
+
+  # Process the nimsuggest switches
+  for switch in cmdLineData.nimsuggestSwitches:
+    case switch.kind
+    of cmdLongOption:
+      case switch.key
+      of "help", "h":
+        echo(helpMsg)
+        echoOptions(data.mode)
+        quit(QuitFailure)
       of "v2":
         suggestVersion = 2
-      else: processSwitch(pass, p)
-    of cmdArgument:
-      options.gProjectName = unixToNativePath(p.key)
-      # if processArgument(pass, p, argsCount): break
-
-proc handleCmdLine() =
-  if paramCount() == 0:
-    stdout.writeline(Usage)
-  else:
-    processCmdLine(passCmd1, "")
-    if gProjectName != "":
-      try:
-        gProjectFull = canonicalizePath(gProjectName)
-      except OSError:
-        gProjectFull = gProjectName
-      var p = splitFile(gProjectFull)
-      gProjectPath = p.dir
-      gProjectName = p.name
+      of "version":
+        quit(nimsuggestVersion)
+      of "nimpath":
+        echo(switch.value)
+        discard parseQuoted(switch.value, nimPath, 0)
+      else:
+        quit("Invalid switch '$#:$#'" % [switch.key, switch.value])
     else:
-      gProjectPath = getCurrentDir()
+      quit("Invalid switch '$#:$#'" % [switch.key, switch.value])
 
-    # Find Nim's prefix dir.
-    let binaryPath = findExe("nim")
-    if binaryPath == "":
-      raise newException(IOError,
-          "Cannot find Nim standard library: Nim compiler not in PATH")
-    gPrefixDir = binaryPath.splitPath().head.parentDir()
+  # Check for project path here. Checking any earlier leads to --help not
+  # working without a project path.
+  if cmdLineData.projectPath == "":
+    quit("Error: Project path not supplied")
 
-    loadConfigs(DefaultConfig) # load all config files
-    # now process command line arguments again, because some options in the
-    # command line can overwite the config file's settings
-    extccomp.initVars()
-    processCmdLine(passCmd2, "")
-    mainCommand()
+  # Initialize mode-specific data
+  # Uses the previously set data.mode
+  data.initModeData(cmdLineData)
 
-when false:
-  proc quitCalled() {.noconv.} =
-    writeStackTrace()
+  # Initialize compiler data
+  setupCompiler(cmdLineData.projectPath, nimPath)
 
-  addQuitProc(quitCalled)
+  # Process the compiler switches
+  for switch in cmdLineData.compilerSwitches:
+    commands.processSwitch(switch.key, switch.value, passCmd1, gCmdLineInfo)
 
-condsyms.initDefines()
-defineSymbol "nimsuggest"
-handleCmdline()
+  # Process the command line again, as some parts may have been overridden by
+  # configuration files.
+  for switch in cmdLineData.compilerSwitches:
+    commands.processSwitch(switch.key, switch.value, passCmd2, gCmdLineInfo)
+
+  var oldHook = msgs.writelnHook
+  msgs.writelnHook = (proc (msg: string) = discard)
+  compileProject()
+  msgs.writelnHook = oldHook
+  data.mainCommand()
+
+suggestVersion = 1
+when isMainModule:
+  main()
