@@ -16,7 +16,7 @@ import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/sigmatch, compiler/ast
 
 
-const 
+const
   nimsuggestVersion = "0.1.0"
   helpMsg = """
 Nimsuggest - Tool to give every editor IDE like capabilities for Nim
@@ -25,7 +25,7 @@ Usage:
 
 Options:
   --nimpath:"path"      Set the path to the Nim compiler.
-  --v2                  Use protocol version 2       
+  --v2                  Use protocol version 2
   --debug               Enable debug output.
   --help                Print help output for the specified mode.
   --version             Print nimsuggest version to stdout, then quit.
@@ -80,11 +80,11 @@ type NimsuggestData = ref object of RootObj
 # ModeData procedures which dispatch into mode-specific procedures.
 proc initModeData(data: NimsuggestData, cmdline: CmdLineData) =
   case data.mode
-  of mkStdin: 
+  of mkStdin:
     data.stdinData = initStdinModeData(cmdline)
-  of mkTcp: 
+  of mkTcp:
     data.tcpData = initTcpModeData(cmdline)
-  of mkEpc: 
+  of mkEpc:
     data.epcData = initEpcModeData(cmdline)
 
 proc echoOptions(mode: ModeKind) =
@@ -162,7 +162,7 @@ proc gatherCmdLineData(): CmdLineData =
 
 proc oldProcessCmdLine*(): CmdLineData =
   ## Old-style processing of command line arguments, for backwards
-  ## compatibility. 
+  ## compatibility.
   var parser = initOptParser()
   result = CmdLineData(
       mode: "",
@@ -224,7 +224,7 @@ proc setupCompiler(projectPath, nimPath: string) =
       gProjectFull = canonicalizePath(gProjectName)
     except OSError:
       gProjectFull = gProjectName
-      
+
     var p = splitFile(gProjectFull)
     gProjectPath = p.dir
   else:
