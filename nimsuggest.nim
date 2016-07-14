@@ -197,6 +197,8 @@ proc oldProcessCmdLine*(): CmdLineData =
         incl(gGlobalOptions, optIdeDebug)
       of "v2":
         suggestVersion = 2
+      of "verbosity":
+        setVerbosity(parseInt(parser.val))
       else:
         result.compilerSwitches.add(
           (parser.kind, parser.key, parser.val)
