@@ -261,8 +261,8 @@ proc setupCompiler(projectPath, nimPath: string) =
 
 proc main =
   var
-      data = NimsuggestData()
-      nimPath = ""
+    data = NimsuggestData()
+    nimPath = ""
 
   if paramCount() == 0:
     quit(helpMsg)
