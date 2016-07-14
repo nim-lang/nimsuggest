@@ -160,7 +160,7 @@ proc gatherCmdLineData(): CmdLineData =
     quit("Error: Extra switches after project file.")
 
 
-proc oldProcessCmdLine*(): CmdLineData =
+proc oldProcessCmdLine*(data: var NimsuggestData): CmdLineData =
   ## Old-style processing of command line arguments, for backwards
   ## compatibility.
   var parser = initOptParser()
@@ -186,6 +186,7 @@ proc oldProcessCmdLine*(): CmdLineData =
         quit(nimsuggestVersion)
       of "port", "address":
         result.mode = "tcp"
+        data.mode = mkTcp
         result.modeSwitches.add(
           (parser.kind, parser.key, parser.val)
         )
@@ -193,6 +194,7 @@ proc oldProcessCmdLine*(): CmdLineData =
         discard
       of "epc":
         result.mode = "epc"
+        data.mode = mkEpc
       of "debug":
         incl(gGlobalOptions, optIdeDebug)
       of "v2":
@@ -279,9 +281,7 @@ proc main =
   of "epc":   data.mode = mkEpc
   of "stdin": data.mode = mkStdin
   else:
-    cmdLineData = oldProcessCmdLine()
-    if cmdLineData.mode == "epc":
-      data.mode = mkEpc
+    cmdLineData = oldProcessCmdLine(data)
 
   # Process the nimsuggest switches
   for switch in cmdLineData.nimsuggestSwitches:
