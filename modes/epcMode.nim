@@ -117,10 +117,6 @@ template checkSanity(client, sizeHex, size, messageBuffer: typed) =
   if client.recv(messageBuffer, size) != size:
     raise newException(ValueError, "didn't get all the bytes")
 
-template setVerbosity(level: typed) =
-  gVerbosity = level
-  gNotes = NotesVerbosity[gVerbosity]
-
 proc mainCommand*(data: EpcModeData) =
   var
     client = newSocket()

@@ -41,6 +41,9 @@ proc symFromInfo(gTrackPos: TLineInfo): PSym =
   if m != nil and m.ast != nil:
     result = m.ast.findNode
 
+template setVerbosity*(level: typed) =
+  gVerbosity = level
+  gNotes = NotesVerbosity[gVerbosity]
 
 proc execute*(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
   gIdeCmd = cmd
