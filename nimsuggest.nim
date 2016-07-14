@@ -172,10 +172,6 @@ proc oldProcessCmdLine*(): CmdLineData =
       projectPath: "",
     )
 
-  result.mode = "stdin"
-  result.modeSwitches.add(
-    (cmdLongoption, "interactive", "true")
-  )
 
   while true:
     parser.next()
@@ -208,6 +204,11 @@ proc oldProcessCmdLine*(): CmdLineData =
     of cmdArgument:
       result.projectPath = unixToNativePath(parser.key)
 
+  if result.mode == "":
+    result.mode = "stdin"
+    result.modeSwitches.add(
+      (cmdLongoption, "interactive", "true")
+    )
 
 # Main setup procs
 
