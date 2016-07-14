@@ -277,6 +277,8 @@ proc main =
   of "stdin": data.mode = mkStdin
   else:
     cmdLineData = oldProcessCmdLine()
+    if cmdLineData.mode == "epc":
+      data.mode = mkEpc
 
   # Process the nimsuggest switches
   for switch in cmdLineData.nimsuggestSwitches:
