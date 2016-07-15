@@ -46,24 +46,6 @@ type
   ModeKind = enum
     mkStdin, mkTcp, mkEpc
 
-  BaseModeData* = object of RootObj
-    projectPath*: string
-
-  CmdLineData* = ref object
-    mode*: string
-    nimsuggestSwitches*: SwitchSequence
-    modeSwitches*: SwitchSequence
-    compilerSwitches*: SwitchSequence
-    projectPath*: string
-
-  SwitchSequence* = seq[
-    tuple[
-      kind: CmdLineKind,
-      key, value: string
-    ]
-  ] not nil
-
-
 import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcMode
 
 

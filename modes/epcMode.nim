@@ -1,5 +1,5 @@
 import tables, net, parseopt2, strutils, parseutils, os, sequtils, rdstdin
-import ../nimsuggest, ../sexp, commonMode
+import ../sexp, commonMode
 
 # Do NOT import suggest. It will lead to wierd bugs with
 # suggestionResultHook, because suggest.nim is included by sigmatch.
