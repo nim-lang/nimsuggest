@@ -352,6 +352,7 @@ proc mainCommand =
     compileProject()
     serveTcp()
   of mepc:
+    modules.gFuzzyGraphChecking = true
     var server = newSocket()
     let port = connectToNextFreePort(server, "localhost")
     server.listen()
