@@ -1,0 +1,28 @@
+sudo: false
+language: c
+os:
+  - linux
+env:
+  - nim_version=0.14.2
+install:
+  - set -e
+  - |
+    if [ ! -x nim-$nim_version/bin/nim ]; then
+      # If the Nim executable does not exist (means we haven't installed Nim yet)
+      # build nim
+      wget http://nim-lang.org/download/nim-$nim_version.tar.xz
+      mkdir nim
+      tar xvJf nim-$nim_version.tar.xz
+      cd nim-$nim_version
+      sh build.sh
+      bin/nim c koch
+      ./koch boot -d:release
+      cd ..
+    fi
+before_script:
+  - mv nim-$nim_version nim
+  - export PATH="nim/bin${PATH:+:$PATH}"
+script:
+  - set -e
+  - nim --version
+  - nim e ./compile_without_nimble.nims
