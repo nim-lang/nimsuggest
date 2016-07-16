@@ -353,6 +353,7 @@ proc mainCommand =
     serveTcp()
   of mepc:
     modules.gFuzzyGraphChecking = true
+    msgs.writelnHook = proc (msg: string) = discard
     var server = newSocket()
     let port = connectToNextFreePort(server, "localhost")
     server.listen()
