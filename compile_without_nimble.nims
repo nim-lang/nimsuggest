@@ -1,2 +1,2 @@
 
-exec "nim c --noNimblePath --path:../nim nimsuggest.nim"
+exec "nim c -d:release --noNimblePath --path:../nim nimsuggest.nim"
