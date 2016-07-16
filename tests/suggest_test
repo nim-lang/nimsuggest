@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+SAMPLE=${SAMPLE:-sample}
+
+# default port
+PORT=${PORT:-6000}
+
+if pgrep nimsuggest; then
+  pkill -9 nimsuggest
+fi
+
+../nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}.nim" &
+
+sleep 3
+
+nc -q 3 localhost $PORT < message > received/$FILE
+
+# -Z : ignore trailing white spaces
+diff -Z expected/$FILE received/$FILE

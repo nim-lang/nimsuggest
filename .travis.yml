@@ -12,11 +12,11 @@ install:
   - bin/nim c koch && ./koch boot -d:release
   - cd .. 
 before_script:
-  - export PATH="nim/bin${PATH:+:$PATH}"
+  - export PATH="${PWD}/nim/bin${PATH:+:$PATH}"
   - nim e ./compile_without_nimble.nims --hints:off
-  - export PATH="./${PATH:+:$PATH}"
+  - export PATH="${PWD}${PATH:+:$PATH}"
 script:
   - set -e
   - nim --version
-  - nimsuggest
   - nimsuggest --version
+  - cd tests && nim e test.nims
