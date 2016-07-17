@@ -10,3 +10,4 @@ proc check(file, direction: string) =
 
 check("tcp_def", "def sample.nim:9:3")
 check("tcp_sug", "sug sample.nim:13:2")
+check("tcp_chk", "chk sample.nim:-1:-1")
