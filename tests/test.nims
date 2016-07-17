@@ -9,3 +9,4 @@ proc check(file, direction: string) =
   port = port + 1
 
 check("tcp_def", "def sample.nim:9:3")
+check("tcp_sug", "sug sample.nim:13:2")
