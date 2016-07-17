@@ -1,4 +1,4 @@
 received/*
-tmp
+expected_tmp
 !received/.gitkeep
 message

@@ -17,4 +17,4 @@ sleep 3
 nc -q 3 localhost $PORT < message > received/$FILE
 
 # -Z : ignore trailing white spaces
-diff -Z tmp/$FILE received/$FILE
+diff -Z expected_tmp/$FILE received/$FILE
