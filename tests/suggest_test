@@ -10,7 +10,7 @@ if pgrep nimsuggest; then
   pkill -9 nimsuggest
 fi
 
-../nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}.nim" &
+nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}.nim" &
 
 sleep 3
 
