@@ -353,7 +353,6 @@ proc mainCommand =
     serveTcp()
   of mepc:
     modules.gFuzzyGraphChecking = true
-    msgs.writelnHook = proc (msg: string) = discard
     var server = newSocket()
     let port = connectToNextFreePort(server, "localhost")
     server.listen()
@@ -393,6 +392,8 @@ proc handleCmdLine() =
     stdout.writeline(Usage)
   else:
     processCmdLine(passCmd1, "")
+    if gMode != mstdin:
+      msgs.writelnHook = proc (msg: string) = discard
     if gProjectName != "":
       try:
         gProjectFull = canonicalizePath(gProjectName)
