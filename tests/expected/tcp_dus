@@ -1,0 +1,3 @@
+def	skProc	sample.hello	proc ()	<<<__TEST_DIRECTORY__>>>/sample.nim	4	5	""
+use	skProc	sample.hello	proc ()	<<<__TEST_DIRECTORY__>>>/sample.nim	4	5	""
+

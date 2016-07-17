@@ -1,0 +1,22 @@
+sudo: false
+language: c
+os:
+  - linux
+install:
+  - set -e
+  - git clone https://github.com/nim-lang/Nim.git nim
+  - cd nim
+  - git clone --depth 1 https://github.com/nim-lang/csources
+  - cd csources && sh build.sh
+  - cd ..
+  - bin/nim c koch && ./koch boot -d:release
+  - cd .. 
+before_script:
+  - export PATH="${PWD}/nim/bin${PATH:+:$PATH}"
+  - nim e ./compile_without_nimble.nims --hints:off
+  - export PATH="${PWD}${PATH:+:$PATH}"
+script:
+  - set -e
+  - nim --version
+  - nimsuggest --version
+  - cd tests && nim e test.nims
