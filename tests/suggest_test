@@ -12,9 +12,9 @@ fi
 
 nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}.nim" &
 
-sleep 3
+sleep 1
 
-nc -q 3 localhost $PORT < message > received/$FILE
+nc -q 1 localhost $PORT < message > received/$FILE
 
 # -Z : ignore trailing white spaces
 diff -Z expected_tmp/$FILE received/$FILE
