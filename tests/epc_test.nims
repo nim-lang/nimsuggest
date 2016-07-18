@@ -36,3 +36,4 @@ when defined(epctest):
   check("epc_def", "def", 1, 9, 3)
   check("epc_dus", "dus", 1, 9, 3)
   check("epc_sug", "sug", 1, 13, 2)
+  check("epc_use", "use", 1, 9, 3)
