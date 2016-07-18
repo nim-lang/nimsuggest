@@ -16,7 +16,6 @@ before_script:
   - nim e ./compile_without_nimble.nims --hints:off
   - export PATH="${PWD}${PATH:+:$PATH}"
 script:
-  - set -e
+  - cd tests
   - nim --version
-  - nimsuggest --version
-  - cd tests && nim e test.nims
+  - nim e -d:epctest ./epc_test.nims
