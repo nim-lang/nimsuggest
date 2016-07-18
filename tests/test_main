@@ -1,0 +1,5 @@
+#!/bin/bash
+# temporary comment out to check epc
+# nim e tcp_test.nims
+echo "test nimsuggest with EPC mode."
+nim e -d:epctest epc_test.nims
