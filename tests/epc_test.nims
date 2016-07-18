@@ -35,3 +35,4 @@ when defined(epctest):
   # Currently nimsuggest-epc is not supported all available methods
   check("epc_def", "def", 1, 9, 3)
   check("epc_dus", "dus", 1, 9, 3)
+  check("epc_sug", "sug", 1, 13, 2)
