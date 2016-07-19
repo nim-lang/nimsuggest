@@ -118,6 +118,7 @@ template checkSanity(client, sizeHex, size, messageBuffer: typed) =
     raise newException(ValueError, "didn't get all the bytes")
 
 proc mainCommand*(data: EpcModeData) =
+  modules.gFuzzyGraphChecking = true
   var
     client = newSocket()
     server = newSocket()

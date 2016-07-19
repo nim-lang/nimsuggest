@@ -13,7 +13,7 @@ import tables, parseopt2, strutils, os, parseutils, sequtils, net, rdstdin, sexp
 import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/passes, compiler/passaux, compiler/msgs, compiler/nimconf,
   compiler/extccomp, compiler/condsyms, compiler/lists,
-  compiler/sigmatch, compiler/ast
+  compiler/sigmatch, compiler/ast, compiler/scriptconfig
 
 
 const
@@ -229,8 +229,18 @@ proc setupCompiler(projectPath, nimPath: string) =
 
   # Load the configuration files
   loadConfigs(DefaultConfig) # load all config files
+  options.command = "nimsuggest"
+  let scriptFile = gProjectFull.changeFileExt("nims")
+  if fileExists(scriptFile):
+    runNimScript(scriptFile, freshDefines=false)
+    # 'nim foo.nims' means to just run the NimScript file and do nothing more:
+    if scriptFile == gProjectFull: return
+  elif fileExists(gProjectPath / "config.nims"):
+    # directory wide NimScript file
+    runNimScript(gProjectPath / "config.nims", freshDefines=false)
 
   extccomp.initVars()
+  clearPasses()
   registerPass verbosePass
   registerPass semPass
 
@@ -241,10 +251,9 @@ proc setupCompiler(projectPath, nimPath: string) =
 
   wantMainModule()
   appendStr(searchPaths, options.libpath)
-  if gProjectFull.len != 0:
+  # if gProjectFull.len != 0:
     # current path is always looked first for modules
-    prependStr(searchPaths, gProjectPath)
-
+    # prependStr(searchPaths, gProjectPath)
 
 proc main =
   var
