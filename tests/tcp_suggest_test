@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-SAMPLE=${SAMPLE:-sample}
+SAMPLE=${SAMPLE:-sample.nim}
 
 # default port
 PORT=${PORT:-6000}
@@ -10,7 +10,7 @@ if pgrep nimsuggest; then
   pkill -9 nimsuggest
 fi
 
-nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}.nim" &
+nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}" &
 
 sleep 1
 
