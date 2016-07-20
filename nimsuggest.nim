@@ -35,6 +35,7 @@ Options:
                           stdout instead of using sockets
   --epc                   use emacs epc mode
   --debug                 enable debug output
+  --verbose               enable verbose logging to nimsuggest.log file
   --v2                    use version 2 of the protocol; more features and
                           much faster
 
@@ -50,6 +51,7 @@ var
   gPort = 6000.Port
   gAddress = ""
   gMode: Mode
+  gVerbose = false
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -60,6 +62,12 @@ const
 
 type
   EUnexpectedCommand = object of Exception
+
+proc logStr(line: string) =
+  var f: File
+  if open(f, getHomeDir() / "nimsuggest.log", fmAppend):
+    f.writeLine(line)
+    f.close()
 
 proc parseQuoted(cmd: string; outp: var string; start: int): int =
   var i = start
@@ -122,6 +130,8 @@ proc symFromInfo(gTrackPos: TLineInfo): PSym =
     result = m.ast.findNode
 
 proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
+  if gVerbose:
+    logStr("cmd: " & $cmd & ", file: " & file & ", dirtyFile: " & dirtyfile & "[" & $line & ":" & $col & "]")
   gIdeCmd = cmd
   if cmd == ideUse and suggestVersion != 2:
     modules.resetAllModules()
@@ -177,7 +187,10 @@ template sendEPC(results: typed, tdef, hook: untyped) =
     )
 
   executeEPC(gIdeCmd, args)
-  returnEPC(client, uid, sexp(results))
+  let res = sexp(results)
+  if gVerbose: 
+    logStr($res)
+  returnEPC(client, uid, res)
 
 template checkSanity(client, sizeHex, size, messageBuffer: typed) =
   if client.recv(sizeHex, 6) != 6:
@@ -266,17 +279,11 @@ proc serveTcp() =
     stdoutSocket.send("\c\L")
     stdoutSocket.close()
 
-proc logStr(line: string) =
-  var f: File
-  if open(f, getHomeDir() / "nimsuggest.log", fmAppend):
-    f.writeLine(line)
-    f.close()
-
 proc serveEpc(server: Socket) =
   var client = newSocket()
   # Wait for connection
   accept(server, client)
-  when false:
+  if gVerbose:
     var it = searchPaths.head
     while it != nil:
       logStr(PStrEntry(it).data)
@@ -352,7 +359,8 @@ proc mainCommand =
     compileProject()
     serveTcp()
   of mepc:
-    modules.gFuzzyGraphChecking = true
+    when compiles(modules.gFuzzyGraphChecking):
+      modules.gFuzzyGraphChecking = true
     var server = newSocket()
     let port = connectToNextFreePort(server, "localhost")
     server.listen()
@@ -382,6 +390,8 @@ proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
         incl(gGlobalOptions, optIdeDebug)
       of "v2":
         suggestVersion = 2
+      of "verbose":
+        gVerbose = true
       else: processSwitch(pass, p)
     of cmdArgument:
       options.gProjectName = unixToNativePath(p.key)
