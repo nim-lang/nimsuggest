@@ -5,16 +5,18 @@ SAMPLE=${SAMPLE:-sample.nim}
 
 # default port
 PORT=${PORT:-6000}
+FREEPORT=$PORT
 
-if pgrep nimsuggest; then
-  pkill -9 nimsuggest
-fi
+while netstat -atn | grep "127.0.0.1:$FREEPORT" >/dev/null 2>&1; do
+  FREEPORT=`expr $FREEPORT + 1`
+done
 
-nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}" &
+PORT=$FREEPORT
+nimsuggest --verbosity:0 --port:$PORT "${SAMPLE}" >/dev/null 2>&1 &
 
-sleep 1
+while ! nc -z localhost $PORT; do
+  sleep 0.1
+done
 
-nc -q 1 localhost $PORT < message > received/$FILE
-
-# -Z : ignore trailing white spaces
-diff -Z expected_tmp/$FILE received/$FILE
+nc -q -1 localhost $PORT < message > received/$FILE &&
+  diff -Z expected_tmp/$FILE received/$FILE

@@ -2,6 +2,10 @@ sudo: false
 language: c
 os:
   - linux
+addons:
+  apt:
+    packages:
+    - net-tools
 install:
   - set -e
   - git clone https://github.com/nim-lang/Nim.git nim
