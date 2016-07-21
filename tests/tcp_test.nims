@@ -27,8 +27,7 @@ test("TCP mode should apply basic methods:"):
   check("tcp_use", "use sample.nim:9:3")
   check("tcp_dus", "dus sample.nim:9:3")
   check("tcp_highlight", "highlight sample.nim:-1:-1")
-  # FIXME: somehow this doesn't work...
-  # check("tcp_chk", "chk sample.nim:-1:-1")
+  check("tcp_chk", "chk sample.nim:-1:-1")
 
 # Check config.nims is properly detect
 test("TCP mode should detect config.nims"):

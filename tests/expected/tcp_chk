@@ -1,3 +1,4 @@
+Hint: sample [Processing]
 sample.nim(4, 14) Error: invalid indentation
 sample.nim(5, 3) Error: expression expected, but found 'Return hello'
 sample.nim(4, 14) Error: 'string' cannot be assigned to
