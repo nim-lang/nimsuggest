@@ -3,7 +3,7 @@
 set -e
 
 echo "Test TCP mode"
-nim e tcp_test.nims
+bats tcp_test.bats
 
 echo "Test EPC mode"
 nim e -d:epctest ./epc_test.nims
