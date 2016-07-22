@@ -1,19 +1,14 @@
 #!/bin/bash
 set -e
 
-SAMPLE=${SAMPLE:-sample}
+SAMPLE=${SAMPLE:-sample.nim}
 
-# Clear previous received message
-rm -f received/*
+nimsuggest --epc --verbosity:0 "${SAMPLE}" > epc_port &
 
-if pgrep nimsuggest; then
-  pkill -9 -x nimsuggest
-fi
-
-nimsuggest --epc --verbosity:0 "${SAMPLE}.nim" > epc_port &
-sleep 1
-
-PORT=`cat ./epc_port`
+while [ -z $PORT ]; do
+  PORT=`cat ./epc_port`
+  sleep 0.3
+done
 
 echo "... checking test case: " $FILE "..."
 nc -q 1 localhost $PORT < message > received/$FILE && bash replace.sh

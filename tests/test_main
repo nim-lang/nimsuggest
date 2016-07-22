@@ -6,5 +6,5 @@ echo "Test TCP mode"
 bats tcp_test.bats
 
 echo "Test EPC mode"
-nim e -d:epctest ./epc_test.nims
+bats epc_test.bats
 nim c -r ./epc_mock_test.nim
