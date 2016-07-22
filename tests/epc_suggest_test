@@ -7,7 +7,7 @@ SAMPLE=${SAMPLE:-sample}
 rm -f received/*
 
 if pgrep nimsuggest; then
-  pkill -9 nimsuggest
+  pkill -9 -x nimsuggest
 fi
 
 nimsuggest --epc --verbosity:0 "${SAMPLE}.nim" > epc_port &
