@@ -3,6 +3,9 @@ set -e
 
 SAMPLE=${SAMPLE:-sample}
 
+# Clear previous received message
+rm -f received/*
+
 if pgrep nimsuggest; then
   pkill -9 nimsuggest
 fi
