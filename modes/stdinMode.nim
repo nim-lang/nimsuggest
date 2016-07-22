@@ -1,6 +1,6 @@
 import tables, net, parseopt2, strutils, rdstdin
 import compiler/msgs
-import ../nimsuggest, commonMode
+import commonMode
 
 const stdinModeHelpMsg = """
 Nimsuggest Stdin Mode Switches:

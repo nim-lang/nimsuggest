@@ -1,0 +1,1 @@
+(return 1 "Hint: config_nims_test [Processing]\u000A<<<__TEST_DIRECTORY__>>>/config_nims_test.nim(4, 3) Error: undeclared identifier: 'undefined_A'\u000A")

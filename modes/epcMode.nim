@@ -1,5 +1,5 @@
 import tables, net, parseopt2, strutils, parseutils, os, sequtils, rdstdin
-import ../nimsuggest, ../sexp, commonMode
+import ../sexp, commonMode
 
 # Do NOT import suggest. It will lead to wierd bugs with
 # suggestionResultHook, because suggest.nim is included by sigmatch.
@@ -117,11 +117,8 @@ template checkSanity(client, sizeHex, size, messageBuffer: typed) =
   if client.recv(messageBuffer, size) != size:
     raise newException(ValueError, "didn't get all the bytes")
 
-template setVerbosity(level: typed) =
-  gVerbosity = level
-  gNotes = NotesVerbosity[gVerbosity]
-
 proc mainCommand*(data: EpcModeData) =
+  modules.gFuzzyGraphChecking = true
   var
     client = newSocket()
     server = newSocket()

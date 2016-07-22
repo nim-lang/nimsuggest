@@ -1,6 +1,6 @@
 import tables, net, parseopt2, strutils
 import compiler/msgs
-import ../nimsuggest, commonMode
+import commonMode
 
 from os import nil
 

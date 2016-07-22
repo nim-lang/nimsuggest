@@ -1,0 +1,9 @@
+Hint: sample [Processing]
+sample.nim(4, 14) Error: invalid indentation
+sample.nim(5, 3) Error: expression expected, but found 'Return hello'
+sample.nim(4, 14) Error: 'string' cannot be assigned to
+sample.nim(6, 3) Error: invalid indentation
+sample.nim(6, 3) Error: value of type 'string' has to be discarded
+sample.nim(13, 1) Error: undeclared identifier: 'he'
+sample.nim(4, 6) Error: implementation of 'sample.hello()' expected
+

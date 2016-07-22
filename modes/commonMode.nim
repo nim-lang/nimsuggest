@@ -8,6 +8,24 @@ import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/extccomp, compiler/condsyms, compiler/lists,
   compiler/sigmatch, compiler/ast
 
+type
+  BaseModeData* = object of RootObj
+    projectPath*: string
+
+  CmdLineData* = ref object
+    mode*: string
+    nimsuggestSwitches*: SwitchSequence
+    modeSwitches*: SwitchSequence
+    compilerSwitches*: SwitchSequence
+    projectPath*: string
+
+  SwitchSequence* = seq[
+    tuple[
+      kind: CmdLineKind,
+      key, value: string
+    ]
+  ] not nil
+
 when defined(windows):
   import winlean
 else:
@@ -41,6 +59,9 @@ proc symFromInfo(gTrackPos: TLineInfo): PSym =
   if m != nil and m.ast != nil:
     result = m.ast.findNode
 
+template setVerbosity*(level: typed) =
+  gVerbosity = level
+  gNotes = NotesVerbosity[gVerbosity]
 
 proc execute*(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
   gIdeCmd = cmd

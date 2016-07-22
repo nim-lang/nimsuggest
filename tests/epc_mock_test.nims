@@ -1,0 +1,3 @@
+--define:unitTest
+--verbosity:0
+--hints:off

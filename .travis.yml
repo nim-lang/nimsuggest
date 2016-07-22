@@ -1,0 +1,28 @@
+language: c
+os:
+  - linux
+addons:
+  apt:
+    packages:
+    - net-tools
+before_install:
+  - sudo add-apt-repository ppa:duggan/bats --yes
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq bats
+install:
+  - set -e
+  - git clone https://github.com/nim-lang/Nim.git nim
+  - cd nim
+  - git clone --depth 1 https://github.com/nim-lang/csources
+  - cd csources && sh build.sh
+  - cd ..
+  - bin/nim c koch && ./koch boot -d:release
+  - cd .. 
+before_script:
+  - export PATH="${PWD}/nim/bin${PATH:+:$PATH}"
+  - nim e ./compile_without_nimble.nims --hints:off
+  - export PATH="${PWD}${PATH:+:$PATH}"
+script:
+  - cd tests
+  - nim --version
+  - ./test_main

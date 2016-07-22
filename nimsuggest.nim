@@ -13,10 +13,10 @@ import tables, parseopt2, strutils, os, parseutils, sequtils, net, rdstdin, sexp
 import compiler/options, compiler/commands, compiler/modules, compiler/sem,
   compiler/passes, compiler/passaux, compiler/msgs, compiler/nimconf,
   compiler/extccomp, compiler/condsyms, compiler/lists,
-  compiler/sigmatch, compiler/ast
+  compiler/sigmatch, compiler/ast, compiler/scriptconfig
 
 
-const 
+const
   nimsuggestVersion = "0.1.0"
   helpMsg = """
 Nimsuggest - Tool to give every editor IDE like capabilities for Nim
@@ -25,7 +25,7 @@ Usage:
 
 Options:
   --nimpath:"path"      Set the path to the Nim compiler.
-  --v2                  Use protocol version 2       
+  --v2                  Use protocol version 2
   --debug               Enable debug output.
   --help                Print help output for the specified mode.
   --version             Print nimsuggest version to stdout, then quit.
@@ -46,24 +46,6 @@ type
   ModeKind = enum
     mkStdin, mkTcp, mkEpc
 
-  BaseModeData* = object of RootObj
-    projectPath*: string
-
-  CmdLineData* = ref object
-    mode*: string
-    nimsuggestSwitches*: SwitchSequence
-    modeSwitches*: SwitchSequence
-    compilerSwitches*: SwitchSequence
-    projectPath*: string
-
-  SwitchSequence* = seq[
-    tuple[
-      kind: CmdLineKind,
-      key, value: string
-    ]
-  ] not nil
-
-
 import modes/commonMode, modes/tcpMode, modes/stdinMode, modes/epcMode
 
 
@@ -80,11 +62,11 @@ type NimsuggestData = ref object of RootObj
 # ModeData procedures which dispatch into mode-specific procedures.
 proc initModeData(data: NimsuggestData, cmdline: CmdLineData) =
   case data.mode
-  of mkStdin: 
+  of mkStdin:
     data.stdinData = initStdinModeData(cmdline)
-  of mkTcp: 
+  of mkTcp:
     data.tcpData = initTcpModeData(cmdline)
-  of mkEpc: 
+  of mkEpc:
     data.epcData = initEpcModeData(cmdline)
 
 proc echoOptions(mode: ModeKind) =
@@ -160,9 +142,9 @@ proc gatherCmdLineData(): CmdLineData =
     quit("Error: Extra switches after project file.")
 
 
-proc oldProcessCmdLine*(): CmdLineData =
+proc oldProcessCmdLine*(data: var NimsuggestData): CmdLineData =
   ## Old-style processing of command line arguments, for backwards
-  ## compatibility. 
+  ## compatibility.
   var parser = initOptParser()
   result = CmdLineData(
       mode: "",
@@ -172,10 +154,6 @@ proc oldProcessCmdLine*(): CmdLineData =
       projectPath: "",
     )
 
-  result.mode = "stdin"
-  result.modeSwitches.add(
-    (cmdLongoption, "interactive", "true")
-  )
 
   while true:
     parser.next()
@@ -190,6 +168,7 @@ proc oldProcessCmdLine*(): CmdLineData =
         quit(nimsuggestVersion)
       of "port", "address":
         result.mode = "tcp"
+        data.mode = mkTcp
         result.modeSwitches.add(
           (parser.kind, parser.key, parser.val)
         )
@@ -197,10 +176,13 @@ proc oldProcessCmdLine*(): CmdLineData =
         discard
       of "epc":
         result.mode = "epc"
+        data.mode = mkEpc
       of "debug":
         incl(gGlobalOptions, optIdeDebug)
       of "v2":
         suggestVersion = 2
+      of "verbosity":
+        setVerbosity(parseInt(parser.val))
       else:
         result.compilerSwitches.add(
           (parser.kind, parser.key, parser.val)
@@ -208,6 +190,11 @@ proc oldProcessCmdLine*(): CmdLineData =
     of cmdArgument:
       result.projectPath = unixToNativePath(parser.key)
 
+  if result.mode == "":
+    result.mode = "stdin"
+    result.modeSwitches.add(
+      (cmdLongoption, "interactive", "true")
+    )
 
 # Main setup procs
 
@@ -224,7 +211,7 @@ proc setupCompiler(projectPath, nimPath: string) =
       gProjectFull = canonicalizePath(gProjectName)
     except OSError:
       gProjectFull = gProjectName
-      
+
     var p = splitFile(gProjectFull)
     gProjectPath = p.dir
   else:
@@ -242,8 +229,18 @@ proc setupCompiler(projectPath, nimPath: string) =
 
   # Load the configuration files
   loadConfigs(DefaultConfig) # load all config files
+  options.command = "nimsuggest"
+  let scriptFile = gProjectFull.changeFileExt("nims")
+  if fileExists(scriptFile):
+    runNimScript(scriptFile, freshDefines=false)
+    # 'nim foo.nims' means to just run the NimScript file and do nothing more:
+    if scriptFile == gProjectFull: return
+  elif fileExists(gProjectPath / "config.nims"):
+    # directory wide NimScript file
+    runNimScript(gProjectPath / "config.nims", freshDefines=false)
 
   extccomp.initVars()
+  clearPasses()
   registerPass verbosePass
   registerPass semPass
 
@@ -254,15 +251,14 @@ proc setupCompiler(projectPath, nimPath: string) =
 
   wantMainModule()
   appendStr(searchPaths, options.libpath)
-  if gProjectFull.len != 0:
+  # if gProjectFull.len != 0:
     # current path is always looked first for modules
-    prependStr(searchPaths, gProjectPath)
-
+    # prependStr(searchPaths, gProjectPath)
 
 proc main =
   var
-      data = NimsuggestData()
-      nimPath = ""
+    data = NimsuggestData()
+    nimPath = ""
 
   if paramCount() == 0:
     quit(helpMsg)
@@ -276,7 +272,7 @@ proc main =
   of "epc":   data.mode = mkEpc
   of "stdin": data.mode = mkStdin
   else:
-    cmdLineData = oldProcessCmdLine()
+    cmdLineData = oldProcessCmdLine(data)
 
   # Process the nimsuggest switches
   for switch in cmdLineData.nimsuggestSwitches:
