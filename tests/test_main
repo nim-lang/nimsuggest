@@ -2,8 +2,8 @@
 
 set -e
 
-echo "Test TCP mode"
+echo "====== Test TCP mode ======"
 bats tcp_test.bats
 
-echo "Test EPC mode"
+echo "====== Test EPC mode ======"
 bats epc_test.bats
