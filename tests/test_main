@@ -7,4 +7,3 @@ bats tcp_test.bats
 
 echo "Test EPC mode"
 bats epc_test.bats
-nim c -r ./epc_mock_test.nim

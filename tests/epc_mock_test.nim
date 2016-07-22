@@ -1,14 +1,20 @@
 import ../sexp, os
 import strutils
 
-let sample = getCurrentDir() / "sample.nim"
+var
+  prjpath = getCurrentDir() / "sample.nim" ## Project Path
+  dirty = prjpath ## dirty file (tmp file)
+  sug = "dus" ## method name like sug/def/dus/chk etc.
+  id = 1 ## uid for EPC (only Emacs care about)
+  line = 9 ## line number to test
+  col = 3 ## column number to test
 
-include "./epc_test.nims"
+include "./epc_call.nims"
 
-proc checkEPCProtocol(sample: string) =
+proc checkEPCProtocol() =
   # Check `mockEPCProtocol` is working correctl
   let
-    s = parseSexp(mockEPCCall("dus", sample, sample, 1, 9, 3, on))
+    s = parseSexp(mockEPCCall(sug, prjpath, dirty, id, line, col, on))
     epcAPI = s[0]
     unique_id = s[1].getNum
     args = s[3]
@@ -20,9 +26,9 @@ proc checkEPCProtocol(sample: string) =
     line = args[1].getNum
     column = args[2].getNum
 
-  assert(sample == dirty)
+  assert(prjpath == dirty) # no need to be same though
   assert(9 == line)
   assert(3 == column)
 
 when isMainModule:
-  checkEPCProtocol(sample)
+  checkEPCProtocol()

@@ -19,6 +19,12 @@ teardown() {
   fi
 }
 
+@test "EPC: check EPC mock command" {
+  # Test mocked EPC's call command
+  # Note that if this test is fail, all EPC's tests will be failed.
+  nim c -r ./epc_mock_test.nim
+}
+
 @test "EPC: def method" {
   nim e -d:sug:def -d:line:9 -d:col:3 epc_call.nims > message
   FILE=epc_def ./epc_suggest_test
