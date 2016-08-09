@@ -345,7 +345,7 @@ proc mainCommand =
   of mstdin:
     modules.gFuzzyGraphChecking = true
     compileProject()
-    modules.gFuzzyGraphChecking = false
+    #modules.gFuzzyGraphChecking = false
     serveStdin()
   of mtcp:
     # until somebody accepted the connection, produce no output (logging is too
@@ -353,7 +353,7 @@ proc mainCommand =
     msgs.writelnHook = proc (msg: string) = discard
     modules.gFuzzyGraphChecking = true
     compileProject()
-    modules.gFuzzyGraphChecking = false
+    #modules.gFuzzyGraphChecking = false
     serveTcp()
   of mepc:
     modules.gFuzzyGraphChecking = true
