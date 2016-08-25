@@ -1,7 +1,7 @@
 #
 #
 #           The Nim Compiler
-#        (c) Copyright 2015 Andreas Rumpf
+#        (c) Copyright 2016 Andreas Rumpf
 #
 #    See the file "copying.txt", included in this
 #    distribution, for details about the copyright.
@@ -23,6 +23,7 @@ when defined(windows):
 else:
   import posix
 
+const DummyEof = "!EOF!"
 const Usage = """
 Nimsuggest - Tool to give every editor IDE like capabilities for Nim
 Usage:
@@ -37,6 +38,8 @@ Options:
   --debug                 enable debug output
   --v2                    use version 2 of the protocol; more features and
                           much faster
+  --tester                implies --v2 and --stdin and outputs a line
+                          '""" & DummyEof & """' for the tester
 
 The server then listens to the connection and takes line-based commands.
 
@@ -50,6 +53,7 @@ var
   gPort = 6000.Port
   gAddress = ""
   gMode: Mode
+  gEmitEof: bool # wether we write '!EOF!' dummy lines
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -240,12 +244,20 @@ proc parseCmdLine(cmd: string) =
   execute(gIdeCmd, orig, dirtyfile, line, col-1)
 
 proc serveStdin() =
-  echo Help
-  var line = ""
-  while readLineFromStdin("> ", line):
-    parseCmdLine line
-    echo ""
-    flushFile(stdout)
+  if gEmitEof:
+    echo DummyEof
+    while true:
+      let line = readLine(stdin)
+      parseCmdLine line
+      echo DummyEof
+      flushFile(stdout)
+  else:
+    echo Help
+    var line = ""
+    while readLineFromStdin("> ", line):
+      parseCmdLine line
+      echo ""
+      flushFile(stdout)
 
 proc serveTcp() =
   var server = newSocket()
@@ -386,6 +398,10 @@ proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
         incl(gGlobalOptions, optIdeDebug)
       of "v2":
         suggestVersion = 2
+      of "tester":
+        suggestVersion = 2
+        gMode = mstdin
+        gEmitEof = true
       else: processSwitch(pass, p)
     of cmdArgument:
       options.gProjectName = unixToNativePath(p.key)

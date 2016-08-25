@@ -50,14 +50,14 @@ type
     err: SexpError
 
 const
-  errorMessages: array [SexpError, string] = [
+  errorMessages: array[SexpError, string] = [
     "no error",
     "invalid token",
     "')' expected",
     "'\"' or \"'\" expected",
     "EOF expected",
   ]
-  tokToStr: array [TTokKind, string] = [
+  tokToStr: array[TTokKind, string] = [
     "invalid token",
     "EOF",
     "string literal",
@@ -437,7 +437,7 @@ proc toSexp(x: NimNode): NimNode {.compiletime.} =
 
   result = prefix(result, "sexp")
 
-macro convertSexp*(x: expr): expr =
+macro convertSexp*(x: untyped): untyped =
   ## Convert an expression to a SexpNode directly, without having to specify
   ## `%` for every element.
   result = toSexp(x)
