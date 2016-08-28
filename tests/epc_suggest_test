@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+SAMPLE=${SAMPLE:-sample}
+
+if pgrep nimsuggest; then
+  pkill -9 nimsuggest
+fi
+
+nimsuggest --epc --verbosity:0 "${SAMPLE}.nim" > epc_port &
+sleep 1
+
+PORT=`cat ./epc_port`
+
+echo "... checking test case: " $FILE "..."
+nc -q 1 localhost $PORT < message > received/$FILE && bash replace.sh
+
+# FIXME: Original message from nimsuggest has 6 digit hex numbers,
+# which represents that message's size, but I couldn't use fixed value
+# in expected file because somehow my machine and travis's machine
+# return different result. So, as the workaround I removed the size
+# from returned message.
+received_msg=`cat received/$FILE`
+echo ${received_msg:6} > received/$FILE.withoutSize
+
+# -Z : ignore trailing white spaces
+diff -Z expected_tmp/$FILE received/$FILE.withoutSize

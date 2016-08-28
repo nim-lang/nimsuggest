@@ -1,0 +1,1 @@
+(return 1 (("def" "skProc" ("sample" "hello") "<<<__TEST_DIRECTORY__>>>/sample.nim" "proc ()" 4 5 "")))

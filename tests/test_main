@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+echo "Test TCP mode"
+nim e tcp_test.nims
+
+echo "Test EPC mode"
+nim e -d:epctest ./epc_test.nims
+nim c -r ./epc_mock_test.nim
