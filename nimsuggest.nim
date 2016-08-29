@@ -36,7 +36,7 @@ Options:
                           stdout instead of using sockets
   --epc                   use emacs epc mode
   --debug                 enable debug output
-  --verbose               enable verbose logging to nimsuggest.log file
+  --log                  enable verbose logging to nimsuggest.log file
   --v2                    use version 2 of the protocol; more features and
                           much faster
   --tester                implies --v2 and --stdin and outputs a line
@@ -55,7 +55,7 @@ var
   gAddress = ""
   gMode: Mode
   gEmitEof: bool # wether we write '!EOF!' dummy lines
-  gVerbose = false
+  gLogging = false
 
 const
   seps = {':', ';', ' ', '\t'}
@@ -134,7 +134,7 @@ proc symFromInfo(gTrackPos: TLineInfo): PSym =
     result = m.ast.findNode
 
 proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
-  if gVerbose:
+  if gLogging:
     logStr("cmd: " & $cmd & ", file: " & file & ", dirtyFile: " & dirtyfile & "[" & $line & ":" & $col & "]")
   gIdeCmd = cmd
   if cmd == ideUse and suggestVersion != 2:
@@ -192,7 +192,7 @@ template sendEPC(results: typed, tdef, hook: untyped) =
 
   executeEPC(gIdeCmd, args)
   let res = sexp(results)
-  if gVerbose:
+  if gLogging:
     logStr($res)
   returnEPC(client, uid, res)
 
@@ -295,7 +295,7 @@ proc serveEpc(server: Socket) =
   var client = newSocket()
   # Wait for connection
   accept(server, client)
-  if gVerbose:
+  if gLogging:
     var it = searchPaths.head
     while it != nil:
       logStr(PStrEntry(it).data)
@@ -344,6 +344,10 @@ proc serveEpc(server: Socket) =
                          "unexpected call: " & epcAPI
       raise newException(EUnexpectedCommand, errMessage)
 
+template beCompatible() =
+  when compiles(modules.gFuzzyGraphChecking):
+    modules.gFuzzyGraphChecking = true
+
 proc mainCommand =
   clearPasses()
   registerPass verbosePass
@@ -362,7 +366,7 @@ proc mainCommand =
 
   case gMode
   of mstdin:
-    modules.gFuzzyGraphChecking = true
+    beCompatible()
     compileProject()
     #modules.gFuzzyGraphChecking = false
     serveStdin()
@@ -370,13 +374,12 @@ proc mainCommand =
     # until somebody accepted the connection, produce no output (logging is too
     # slow for big projects):
     msgs.writelnHook = proc (msg: string) = discard
-    modules.gFuzzyGraphChecking = true
+    beCompatible()
     compileProject()
     #modules.gFuzzyGraphChecking = false
     serveTcp()
   of mepc:
-    when compiles(modules.gFuzzyGraphChecking):
-      modules.gFuzzyGraphChecking = true
+    beCompatible()
     var server = newSocket()
     let port = connectToNextFreePort(server, "localhost")
     server.listen()
@@ -410,8 +413,8 @@ proc processCmdLine*(pass: TCmdLinePass, cmd: string) =
         suggestVersion = 2
         gMode = mstdin
         gEmitEof = true
-      of "verbose":
-        gVerbose = true
+      of "log":
+        gLogging = true
       else: processSwitch(pass, p)
     of cmdArgument:
       options.gProjectName = unixToNativePath(p.key)
