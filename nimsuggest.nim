@@ -141,7 +141,7 @@ proc execute(cmd: IdeCmd, file, dirtyfile: string, line, col: int) =
     usageSym = nil
   if not isKnownFile:
     compileProject()
-  if suggestVersion == 2 and gIdeCmd in {ideDef, ideUse, ideDus} and
+  if suggestVersion == 2 and gIdeCmd in {ideUse, ideDus} and
       dirtyfile.len == 0:
     discard "no need to recompile anything"
   else:

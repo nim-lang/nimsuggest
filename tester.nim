@@ -3,7 +3,7 @@
 # before 'nimsuggest' is invoked to ensure this token doesn't make a
 # crucial difference for Nim's parser.
 
-import os, osproc, strutils, streams
+import os, osproc, strutils, streams, re
 
 type
   Test = object
@@ -50,6 +50,10 @@ proc parseTest(filename: string): Test =
   for a in mitems(result.script):
     a[0] = a[0] % markers
 
+proc smartCompare(pattern, x: string): bool =
+  if pattern.contains('*'):
+    result = match(x, re(escapeRe(pattern).replace("\\x2A","(.*)"), {}))
+
 proc runTest(filename: string): int =
   let s = parseTest filename
   let cl = parseCmdLine(s.cmd)
@@ -72,7 +76,7 @@ proc runTest(filename: string): int =
         if a == DummyEof: break
         answer.add a
         answer.add '\L'
-      if answer != resp:
+      if resp != answer and not smartCompare(resp, answer):
         report.add "\nTest failed: " & filename
         report.add "\n  Expected:  " & resp
         report.add "\n  But got:   " & answer
