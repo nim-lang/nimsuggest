@@ -317,7 +317,7 @@ proc serveEpc(server: Socket) =
         uid = message[1].getNum
         args = message[3]
 
-      gIdeCmd = parseIdeCmd(message[2].getStr)
+      gIdeCmd = parseIdeCmd(message[2].getSymbol)
       case gIdeCmd
       of ideChk:
         setVerbosity(1)
