@@ -36,7 +36,7 @@ Options:
                           stdout instead of using sockets
   --epc                   use emacs epc mode
   --debug                 enable debug output
-  --log                  enable verbose logging to nimsuggest.log file
+  --log                   enable verbose logging to nimsuggest.log file
   --v2                    use version 2 of the protocol; more features and
                           much faster
   --tester                implies --v2 and --stdin and outputs a line
@@ -54,7 +54,7 @@ var
   gPort = 6000.Port
   gAddress = ""
   gMode: Mode
-  gEmitEof: bool # wether we write '!EOF!' dummy lines
+  gEmitEof: bool # whether we write '!EOF!' dummy lines
   gLogging = false
 
 const
@@ -317,7 +317,7 @@ proc serveEpc(server: Socket) =
         uid = message[1].getNum
         args = message[3]
 
-      gIdeCmd = parseIdeCmd(message[2].getStr)
+      gIdeCmd = parseIdeCmd(message[2].getSymbol)
       case gIdeCmd
       of ideChk:
         setVerbosity(1)
